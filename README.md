@@ -1,5 +1,7 @@
 # RAG From Scratch
 
+**Version:** 2.0 | **Status:** Production-ready with ChromaDB
+
 Minimal Retrieval-Augmented Generation (RAG) system built from scratch, to understand how everything works under the hood without LangChain and heavy frameworks.
 
 ## 🎯 Project Goal
@@ -13,7 +15,7 @@ User Query
 ↓  
 Embedding Model (`text-embedding-3-small` via OpenRouter)  
 ↓  
-Cosine Similarity Search  
+**ChromaDB Vector Store** (HNSW similarity search)  
 ↓  
 Top-K Documents Retrieved  
 ↓  
@@ -23,7 +25,8 @@ Generated Answer + Sources
 
 ## ✨ Features
 
-- **Manual implementation**: cosine similarity, semantic search, RAG pipeline without LangChain
+- **ChromaDB integration**: Persistent vector storage with HNSW indexing for fast similarity search
+- **Manual implementation**: Full RAG pipeline understanding without heavy frameworks
 - **Document loading**: automatic collection of `.txt` files from `documents/` folder
 - **Chunking**: splitting long texts into chunks (500 chars with 100 chars overlap)
 - **Metadata & sources**: for each chunk we store `source`, `chunk_id`, `total_chunks`
@@ -35,9 +38,10 @@ Generated Answer + Sources
 
 - **Python 3.11**
 - **FastAPI** (REST API around RAG)
+- **ChromaDB** (vector database for persistent embeddings storage)
 - **OpenRouter API** (embeddings + LLM)
 - **NumPy** (vector operations)
-- **requests** (HTTP calls to OpenRouter API without `openai` SDK)
+- **requests** (HTTP calls to OpenRouter API)
 
 ## 📦 Installation
 
@@ -56,7 +60,7 @@ python -m venv venv
 # Install dependencies
 pip install -r requirements.txt  # if you have it
 # or minimal:
-pip install fastapi uvicorn numpy requests
+pip install fastapi uvicorn numpy requests python-dotenv chromadb
 
 # Set up API key (OpenRouter)
 # Linux / macOS:
@@ -81,7 +85,7 @@ Calls LLM and prints answer + sources
 🌐 REST API
 api.py exposes a FastAPI service on top of the RAG pipeline:
 
-POST /upload — accept raw text or file, split into chunks, compute embeddings and store them in an in-memory “knowledge base”
+POST /upload — accept raw text or file, split into chunks, compute embeddings and store them in ChromaDB vector database
 
 POST /query — accept a question, find top-K relevant chunks and generate an answer with sources
 
@@ -124,57 +128,72 @@ Python is widely used for web development, data science,
 automation, and artificial intelligence.
 
 📚 Sources: python.txt (chunk 1/2)
-🧪 What I Learned
-Core Concepts
-Embeddings — converting text into fixed-size vectors (e.g. 1536) to compare meaning instead of raw strings
 
-Cosine similarity — similarity metric between vectors (1 = very similar, 0 = unrelated)
+## 🆕 What's New in v2.0
 
-Semantic search — finding documents by meaning using embeddings + similarity search
+### ChromaDB Integration
+- ✅ **Persistent storage**: Embeddings saved to disk (`./chroma_db/`), survive restarts
+- ✅ **HNSW indexing**: Fast similarity search even with thousands of documents
+- ✅ **Metadata support**: Track source, chunk_id, total_chunks for each embedding
+- ✅ **Production-ready**: No more in-memory lists, scalable architecture
 
-RAG pipeline — separating retrieval (finding context) and generation (LLM answering)
+### Migration from v1.0
+**v1.0** used in-memory Python list to store embeddings:
+- Lost all data on restart
+- Slow linear search through all embeddings
+- Good for learning, not for production
 
-Chunking & metadata — why we need to split long texts and keep track of where each piece came from
+**v2.0** uses ChromaDB:
+- Data persists on disk
+- Optimized vector search with indexing
+- Ready for real-world usage
 
-Implementation Details
-Cosine similarity implemented manually: dot_product / (norm1 * norm2)
+To see v1.0 code: `git checkout v1.0`
 
-Embeddings and LLM calls are made via OpenRouter API (no openai SDK dependency)
 
-Documents are loaded automatically and split into chunks
+## 🧪 What I Learned
 
-Answers include the source (file name and chunk index)
+### Core Concepts
+- Embeddings — converting text into fixed-size vectors
+- Cosine similarity — similarity metric between vectors
+- Semantic search — finding documents by meaning
+- RAG pipeline — separating retrieval and generation
+- Chunking & metadata — splitting texts and tracking sources
+- **Vector databases** — specialized storage for embeddings with fast similarity search
 
-📊 Project Evolution
-Current Version (v0.2):
+### Implementation Details
+- ~~Cosine similarity implemented manually~~ → **Replaced with ChromaDB HNSW indexing**
+- Embeddings and LLM calls via OpenRouter API
+- Documents loaded and chunked automatically
+- **Persistent storage** with ChromaDB (survives restarts)
+- Answers include source attribution
 
-✅ Manual embeddings + similarity search
+## 📊 Project Evolution
 
-✅ Document loading + chunking
+**Current Version (v2.0):**
+✅ ChromaDB vector database integration  
+✅ Persistent storage (chroma_db/ folder)  
+✅ HNSW indexing for fast search  
+✅ Production-ready architecture  
+✅ Full RAG pipeline with metadata  
+✅ FastAPI REST API  
 
-✅ Source attribution (metadata)
+**Previous Version (v1.0):**
+✅ Manual embeddings + cosine similarity  
+✅ In-memory storage  
+✅ Basic RAG pipeline  
 
-✅ Full RAG pipeline (retrieval + generation)
+**Planned (v2.1):**
+- [ ] Improved chunking (by sentences/paragraphs)
+- [ ] Basic monitoring of requests and responses
+- [ ] Multiple document formats (PDF, DOCX)
 
-✅ FastAPI REST API
+**Future (v3.0):**
+- [ ] Docker deployment
+- [ ] Logging and quality metrics
+- [ ] Web UI (Streamlit)
+- [ ] Hybrid search (keyword + semantic)
 
-Planned (v0.3):
-
-Vector DB (Chroma/Qdrant) instead of in-memory storage
-
-Improved chunking (by sentences/paragraphs)
-
-Basic monitoring of requests and responses
-
-Future (v1.0):
-
-Production-ready API (Docker, env configs)
-
-Logging and quality metrics
-
-Web UI (e.g. Streamlit)
-
-Advanced retrieval (hybrid search, reranking)
 
 💡 Why This Approach?
 Starting with plain Python and minimal dependencies, then moving to frameworks. This gives:
