@@ -1,0 +1,4 @@
+Python is a high-level programming language created by Guido van Rossum in 1991.
+It is widely used for web development, data science, machine learning, and automation.
+Python has a simple syntax that is easy to learn for beginners.
+Popular frameworks include Django for web and PyTorch for machine learning.

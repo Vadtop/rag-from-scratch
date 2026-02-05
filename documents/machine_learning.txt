@@ -1,0 +1,4 @@
+Machine learning is a subset of artificial intelligence that enables computers to learn from data.
+Common algorithms include neural networks, decision trees, and support vector machines.
+Deep learning uses multi-layered neural networks for complex tasks like image recognition.
+Popular libraries include TensorFlow, PyTorch, and scikit-learn.

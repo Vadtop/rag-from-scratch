@@ -1,0 +1,4 @@
+RAG stands for Retrieval-Augmented Generation.
+It combines semantic search with large language models to answer questions using external knowledge.
+The process involves: 1) converting documents to embeddings, 2) finding relevant documents, 3) generating answers.
+Vector databases like Chroma and Pinecone are commonly used to store embeddings.
