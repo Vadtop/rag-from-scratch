@@ -1,3 +1,5 @@
+# WIP: experiments with LangChain, not used in main pipeline yet
+
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import Chroma  # ← ИЗМЕНЕНО
 from langchain.chains import RetrievalQA

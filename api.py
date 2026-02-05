@@ -4,10 +4,11 @@ import requests
 import numpy as np
 import os
 from dotenv import load_dotenv
+from vector_store import VectorStore
 
 load_dotenv()  # читаем OPENROUTER_API_KEY из .env
 
-app = FastAPI(title="RAG API", version="1.0")
+app = FastAPI(title="RAG API", version="2.0")
 
 # ========== НАСТРОЙКИ ==========
 API_KEY = os.environ["OPENROUTER_API_KEY"]
@@ -15,7 +16,7 @@ BASE_URL = "https://openrouter.ai/api/v1"
 
 
 # Глобальное хранилище chunks (в памяти)
-chunks = []
+vector_store = VectorStore()
 
 # ========== API ФУНКЦИИ ==========
 def get_embedding(text):
@@ -59,11 +60,6 @@ def chunk_text(text, chunk_size=500, overlap=100):
         start += (chunk_size - overlap)
     return chunks_list
 
-def cosine_similarity(vec1, vec2):
-    dot_product = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-    return dot_product / (norm1 * norm2)
 
 # ========== MODELS ==========
 class QueryRequest(BaseModel):
@@ -80,7 +76,7 @@ class QueryResponse(BaseModel):
 def root():
     return {
         "message": "RAG API",
-        "version": "1.0",
+        "version": "2.0",
         "endpoints": {
             "POST /upload": "Upload document",
             "POST /query": "Ask question",
@@ -99,30 +95,35 @@ async def upload_document(file: UploadFile = File(...)):
     # Chunking
     text_chunks = chunk_text(text, chunk_size=500, overlap=100)
     
-    # Создаём embeddings
+    # Создаём embeddings и сохраняем в ChromaDB
     for i, chunk in enumerate(text_chunks):
         embedding = get_embedding(chunk)
         
-        chunks.append({
-            "content": chunk,
-            "source": file.filename,
-            "chunk_id": i,
-            "total_chunks": len(text_chunks),
-            "embedding": embedding
-        })
+        chunk_id = f"{file.filename}_chunk_{i}"
+        
+        vector_store.add_chunk(
+            chunk_id=chunk_id,
+            content=chunk,
+            embedding=embedding,
+            metadata={
+                "source": file.filename,
+                "chunk_id": i,
+                "total_chunks": len(text_chunks)
+            }
+        )
     
     return {
         "status": "success",
         "filename": file.filename,
         "chunks_created": len(text_chunks),
-        "total_chunks_in_db": len(chunks)
+        "total_chunks_in_db": vector_store.count()
     }
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
     """Отвечает на вопрос используя RAG"""
     
-    if not chunks:
+    if vector_store.count() == 0:
         return QueryResponse(
             answer="No documents uploaded yet. Please upload documents first.",
             sources=[],
@@ -132,20 +133,19 @@ def query(req: QueryRequest):
     # Embedding запроса
     query_emb = get_embedding(req.query)
     
-    # Поиск
-    results = []
-    for chunk in chunks:
-        sim = cosine_similarity(query_emb, chunk["embedding"])
-        results.append((chunk, sim))
+    # Поиск через ChromaDB
+    results = vector_store.search(query_emb, top_k=req.top_k)
     
-    results.sort(key=lambda x: x[1], reverse=True)
-    top_chunks = results[:req.top_k]
+    # Извлекаем данные из результатов
+    documents = results['documents'][0]  # list of texts
+    metadatas = results['metadatas'][0]  # list of metadata dicts
+    distances = results['distances'][0]  # list of distances (lower = better)
     
-    # Контекст
+    # Формируем контекст
     context_parts = []
-    for chunk, score in top_chunks:
+    for i, (doc, meta) in enumerate(zip(documents, metadatas)):
         context_parts.append(
-            f"[{chunk['source']}, chunk {chunk['chunk_id']+1}/{chunk['total_chunks']}]\n{chunk['content']}"
+            f"[{meta['source']}, chunk {meta['chunk_id']+1}/{meta['total_chunks']}]\n{doc}"
         )
     
     context = "\n\n---\n\n".join(context_parts)
@@ -162,14 +162,14 @@ Answer (be concise):"""
     
     answer = get_completion([{"role": "user", "content": prompt}])
     
-    sources = list(set([chunk['source'] for chunk, _ in top_chunks]))
+    sources = list(set([meta['source'] for meta in metadatas]))
     chunks_used = [
         {
-            "source": chunk['source'],
-            "chunk_id": chunk['chunk_id'] + 1,
-            "similarity": float(f"{score:.3f}")
+            "source": meta['source'],
+            "chunk_id": meta['chunk_id'] + 1,
+            "distance": float(f"{dist:.3f}")
         }
-        for chunk, score in top_chunks
+        for meta, dist in zip(metadatas, distances)
     ]
     
     return QueryResponse(
@@ -181,19 +181,19 @@ Answer (be concise):"""
 @app.get("/stats")
 def get_stats():
     """Статистика базы знаний"""
-    sources = list(set([chunk['source'] for chunk in chunks]))
+    sources = vector_store.get_all_sources()
     
     return {
-        "total_chunks": len(chunks),
+        "total_chunks": vector_store.count(),
         "total_documents": len(sources),
         "documents": sources
     }
 
+
 @app.delete("/reset")
 def reset():
     """Очищает базу знаний"""
-    global chunks
-    chunks = []
+    vector_store.clear()
     return {"status": "success", "message": "Database cleared"}
 
 # ========== ЗАПУСК ==========
