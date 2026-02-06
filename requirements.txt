@@ -1,1 +1,9 @@
+fastapi
+uvicorn
+numpy
+requests
+python-dotenv
 chromadb>=0.4.0
+langchain
+langchain-openai
+langchain-community

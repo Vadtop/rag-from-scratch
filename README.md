@@ -1,6 +1,6 @@
 # RAG From Scratch
 
-**Version:** 2.0 | **Status:** Production-ready with ChromaDB
+**Version:** 2.1 | **Status:** Production-ready with ChromaDB + LangChain
 
 Minimal Retrieval-Augmented Generation (RAG) system built from scratch, to understand how everything works under the hood without LangChain and heavy frameworks.
 
@@ -11,17 +11,19 @@ This project is part of my learning path towards an AI/LLM Engineer role.
 
 ## 🏗️ Architecture
 
+```
 User Query  
-↓  
-Embedding Model (`text-embedding-3-small` via OpenRouter)  
-↓  
-**ChromaDB Vector Store** (HNSW similarity search)  
-↓  
+    ↓  
+Embedding Model (text-embedding-3-small via OpenRouter)  
+    ↓  
+ChromaDB Vector Store (HNSW similarity search)  
+    ↓  
 Top-K Documents Retrieved  
-↓  
-LLM (`gpt-3.5-turbo`) with Context  
-↓  
+    ↓  
+LLM (gpt-3.5-turbo) with Context  
+    ↓  
 Generated Answer + Sources
+```
 
 ## ✨ Features
 
@@ -47,7 +49,7 @@ Generated Answer + Sources
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR_USERNAME/rag-from-scratch.git
+git clone https://github.com/Vadtop/rag-from-scratch.git
 cd rag-from-scratch
 
 # (optional) create venv
@@ -67,163 +69,233 @@ pip install fastapi uvicorn numpy requests python-dotenv chromadb
 export OPENROUTER_API_KEY="your-key-here"
 # Windows (cmd):
 # set OPENROUTER_API_KEY=your-key-here
-🚀 Usage (CLI demo)
+```
+
+## 🚀 Usage (CLI demo)
+
 Simple script to test RAG locally without API:
 
-bash
+```bash
 python step1_embeddings.py
+```
+
 What it does:
 
-Loads .txt files from documents/
+- Loads `.txt` files from `documents/`
+- Computes embeddings
+- Runs similarity search
+- Calls LLM and prints answer + sources
 
-Computes embeddings
+## 🌐 REST API
 
-Runs similarity search
+`api.py` exposes a FastAPI service on top of the RAG pipeline:
 
-Calls LLM and prints answer + sources
+- **POST /upload** — accept raw text or file, split into chunks, compute embeddings and store them in ChromaDB vector database
+- **POST /query** — accept a question, find top-K relevant chunks and generate an answer with sources
+- **POST /upload_langchain** — upload documents to LangChain RAG
+- **POST /query_langchain** — query using LangChain RAG
+- **GET /stats** — show how many documents and chunks are currently loaded
+- **DELETE /reset** — clear the knowledge base
 
-🌐 REST API
-api.py exposes a FastAPI service on top of the RAG pipeline:
+**Run API:**
 
-POST /upload — accept raw text or file, split into chunks, compute embeddings and store them in ChromaDB vector database
-
-POST /query — accept a question, find top-K relevant chunks and generate an answer with sources
-
-GET /stats — show how many documents and chunks are currently loaded
-
-DELETE /reset — clear the knowledge base
-
-Run API:
-
-bash
+```bash
 uvicorn api:app --reload
-Open interactive docs at:
-http://localhost:8000/docs
+```
+
+Open interactive docs at: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 This allows using RAG as a standalone service that can be connected to chat-bots, frontends or internal tools.
 
-📂 Add Your Own Documents
-Create .txt files in the documents/ folder.
+## 📂 Add Your Own Documents
 
-Run the script or API — documents will be automatically loaded and chunked.
+1. Create `.txt` files in the `documents/` folder
+2. Run the script or API — documents will be automatically loaded and chunked
+3. Ask questions related to your content
 
-Ask questions related to your content.
+**Example:**
 
-Example:
-
-text
+```python
 # documents/python.txt
 Python is a high-level programming language...
+```
 
+```python
 # documents/machine_learning.txt
 Machine learning is a subset of AI...
-python
-# CLI demo
-rag_pipeline("What is Python used for?")
-Sample output:
+```
 
-text
+**CLI demo:**
+
+```python
+rag_pipeline("What is Python used for?")
+```
+
+**Sample output:**
+
+```
 ✅ ANSWER:
 Python is widely used for web development, data science,
 automation, and artificial intelligence.
 
 📚 Sources: python.txt (chunk 1/2)
+```
 
-## 🆕 What's New in v2.0
+## 🆕 What's New in v2.1
 
-### ChromaDB Integration
+### LangChain Integration
+
+- ✅ **Two approaches in one project**: Manual RAG + LangChain RAG side-by-side
+- ✅ **Fast prototyping**: LangChain endpoints for rapid development
+- ✅ **Comparison ready**: Test both approaches with same queries
+
+### ChromaDB Integration (v2.0)
+
 - ✅ **Persistent storage**: Embeddings saved to disk (`./chroma_db/`), survive restarts
 - ✅ **HNSW indexing**: Fast similarity search even with thousands of documents
 - ✅ **Metadata support**: Track source, chunk_id, total_chunks for each embedding
 - ✅ **Production-ready**: No more in-memory lists, scalable architecture
 
 ### Migration from v1.0
+
 **v1.0** used in-memory Python list to store embeddings:
+
 - Lost all data on restart
 - Slow linear search through all embeddings
 - Good for learning, not for production
 
-**v2.0** uses ChromaDB:
+**v2.0+** uses ChromaDB:
+
 - Data persists on disk
 - Optimized vector search with indexing
 - Ready for real-world usage
 
 To see v1.0 code: `git checkout v1.0`
 
-
 ## 🧪 What I Learned
 
 ### Core Concepts
-- Embeddings — converting text into fixed-size vectors
-- Cosine similarity — similarity metric between vectors
-- Semantic search — finding documents by meaning
-- RAG pipeline — separating retrieval and generation
-- Chunking & metadata — splitting texts and tracking sources
+
+- **Embeddings** — converting text into fixed-size vectors
+- **Cosine similarity** — similarity metric between vectors
+- **Semantic search** — finding documents by meaning
+- **RAG pipeline** — separating retrieval and generation
+- **Chunking & metadata** — splitting texts and tracking sources
 - **Vector databases** — specialized storage for embeddings with fast similarity search
+- **LangChain framework** — rapid prototyping vs manual implementation trade-offs
 
 ### Implementation Details
+
 - ~~Cosine similarity implemented manually~~ → **Replaced with ChromaDB HNSW indexing**
 - Embeddings and LLM calls via OpenRouter API
 - Documents loaded and chunked automatically
 - **Persistent storage** with ChromaDB (survives restarts)
 - Answers include source attribution
+- **Two parallel implementations** for comparison
 
 ## 📊 Project Evolution
 
-**Current Version (v2.0):**
-✅ ChromaDB vector database integration  
-✅ Persistent storage (chroma_db/ folder)  
-✅ HNSW indexing for fast search  
-✅ Production-ready architecture  
-✅ Full RAG pipeline with metadata  
-✅ FastAPI REST API  
+This project evolved through multiple iterations:
 
-**Previous Version (v1.0):**
-✅ Manual embeddings + cosine similarity  
-✅ In-memory storage  
-✅ Basic RAG pipeline  
+**v1.0 → v2.0 → v2.1**
 
-**Planned (v2.1):**
-- [ ] Improved chunking (by sentences/paragraphs)
-- [ ] Basic monitoring of requests and responses
-- [ ] Multiple document formats (PDF, DOCX)
+- **v1.0:** Manual RAG with in-memory storage (learning phase)
+- **v2.0:** Added ChromaDB for production-ready persistent storage
+- **v2.1:** Integrated LangChain to compare manual vs framework approach
 
-**Future (v3.0):**
-- [ ] Docker deployment
-- [ ] Logging and quality metrics
-- [ ] Web UI (Streamlit)
-- [ ] Hybrid search (keyword + semantic)
+**Current features (v2.1):**
 
+- ✅ ChromaDB vector database with HNSW indexing
+- ✅ Persistent storage on disk
+- ✅ FastAPI REST API
+- ✅ Two parallel implementations (Manual + LangChain)
+- ✅ Full metadata tracking and source attribution
 
-💡 Why This Approach?
+**What's next (v2.2):**
+
+- ⬜ Improved chunking strategies
+- ⬜ Basic monitoring and metrics
+- ⬜ Multiple document formats (PDF, DOCX)
+
+## 🔄 Two Approaches Comparison
+
+This project demonstrates **two ways to build RAG**:
+
+### 1️⃣ Manual RAG (`/query`)
+
+**Pros:**
+
+- Full control over every step
+- Easy to debug and customize
+- Understand how everything works
+
+**Cons:**
+
+- More code to write (~200 lines)
+- Need to handle errors manually
+
+**Use when:** Custom logic, learning, full flexibility needed
+
+---
+
+### 2️⃣ LangChain RAG (`/query_langchain`)
+
+**Pros:**
+
+- Fast development (~20 lines)
+- Built-in error handling
+- Production-ready patterns
+
+**Cons:**
+
+- Less control (black box)
+- Framework dependency
+
+**Use when:** Quick MVP, standard use case, time pressure
+
+---
+
+### 📊 Live Comparison
+
+Both endpoints work in parallel:
+
+```python
+# Manual approach
+POST /upload → /query
+
+# LangChain approach
+POST /upload_langchain → /query_langchain
+```
+
+**Key insight:** Understanding fundamentals (manual) + knowing frameworks (LangChain) = strong engineer
+
+## 💡 Why This Approach?
+
 Starting with plain Python and minimal dependencies, then moving to frameworks. This gives:
 
-Clear understanding of how RAG works inside
+- Clear understanding of how RAG works inside
+- Ability to debug and optimize the pipeline for specific products
+- Confidence in technical interviews when asked "what's inside LangChain?"
 
-Ability to debug and optimize the pipeline for specific products
+> "Junior uses libraries. Middle understands what happens under the hood."
 
-Confidence in technical interviews when asked “what’s inside LangChain?”
+## 🎓 Interview Readiness
 
-“Junior uses libraries. Middle understands what happens under the hood.”
-
-🎓 Interview Readiness
 Based on this project I can:
 
-Explain the difference between keyword search and semantic search
+- Explain the difference between keyword search and semantic search
+- Describe the RAG pipeline and why chunking is needed
+- Show working RAG + API code
+- Discuss where it makes sense to plug in a vector DB and monitoring
+- **Compare manual implementation vs framework approach**
 
-Describe the RAG pipeline and why chunking is needed
+## 📝 Notes
 
-Show working RAG + API code
+- This is a learning project, not a full production solution
+- API keys are not included in the repo — use your own via environment variables
+- Built as part of an intensive learning path to transition into AI/LLM Engineering
 
-Discuss where it makes sense to plug in a vector DB and monitoring
+## 📧 Contact
 
-📝 Notes
-This is a learning project, not a full production solution
-
-API keys are not included in the repo — use your own via environment variables
-
-Built as part of an intensive learning path to transition into AI/LLM Engineering
-
-📧 Contact
-Built by Vadim Titov as part of transition to an AI/LLM Engineer role.
+Built by **Vadim Titov** as part of transition to an AI/LLM Engineer role.  
 Focus areas: RAG, automation, AI assistants for customer support.

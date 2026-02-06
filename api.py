@@ -76,11 +76,18 @@ class QueryResponse(BaseModel):
 def root():
     return {
         "message": "RAG API",
-        "version": "2.0",
+        "version": "2.1",
         "endpoints": {
-            "POST /upload": "Upload document",
-            "POST /query": "Ask question",
-            "GET /stats": "Get statistics"
+            "POST /upload": "Upload document (Manual RAG)",
+            "POST /query": "Ask question (Manual RAG)",
+            "POST /upload_langchain": "Upload document (LangChain RAG)",
+            "POST /query_langchain": "Ask question (LangChain RAG)",
+            "GET /stats": "Get statistics",
+            "DELETE /reset": "Clear database"
+        },
+        "approaches": {
+            "manual": "Full control, custom logic (v2.0)",
+            "langchain": "Fast development, framework benefits (v2.1)"
         }
     }
 
@@ -195,6 +202,49 @@ def reset():
     """Очищает базу знаний"""
     vector_store.clear()
     return {"status": "success", "message": "Database cleared"}
+
+# ========== LANGCHAIN RAG ENDPOINT ==========
+
+from step2_langchain import LangChainRAG
+
+# Инициализация LangChain RAG
+langchain_rag = LangChainRAG()
+
+@app.post("/query_langchain")
+def query_langchain(req: QueryRequest):
+    """Отвечает на вопрос используя LangChain RAG"""
+    
+    result = langchain_rag.query(req.query)
+    
+    return {
+        "answer": result["answer"],
+        "sources": result["sources"],
+        "method": "langchain",
+        "chunks_used": result.get("chunks_used", 0)
+    }
+
+
+@app.post("/upload_langchain")
+async def upload_langchain(file: UploadFile = File(...)):
+    """Загружает документ в LangChain RAG"""
+    
+    # Сохраняем файл временно
+    content = await file.read()
+    temp_path = f"documents/{file.filename}"
+    
+    with open(temp_path, "wb") as f:
+        f.write(content)
+    
+    # Перезагружаем документы
+    chunks_count = langchain_rag.load_documents()
+    
+    return {
+        "status": "success",
+        "filename": file.filename,
+        "chunks_created": chunks_count,
+        "method": "langchain"
+    }
+
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
