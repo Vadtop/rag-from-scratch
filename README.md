@@ -1,6 +1,6 @@
 # RAG From Scratch
 
-**Version:** 2.1 | **Status:** Production-ready with ChromaDB + LangChain
+**Version:** 2.1 | **Status:** Production-ready with ChromaDB + LangChain + Evaluation
 
 Minimal Retrieval-Augmented Generation (RAG) system built from scratch, to understand how everything works under the hood without LangChain and heavy frameworks.
 
@@ -12,16 +12,16 @@ This project is part of my learning path towards an AI/LLM Engineer role.
 ## 🏗️ Architecture
 
 ```
-User Query  
-    ↓  
-Embedding Model (text-embedding-3-small via OpenRouter)  
-    ↓  
-ChromaDB Vector Store (HNSW similarity search)  
-    ↓  
-Top-K Documents Retrieved  
-    ↓  
-LLM (gpt-3.5-turbo) with Context  
-    ↓  
+User Query
+↓
+Embedding Model (text-embedding-3-small via OpenRouter)
+↓
+ChromaDB Vector Store (HNSW similarity search)
+↓
+Top-K Documents Retrieved
+↓
+LLM (gpt-3.5-turbo) with Context
+↓
 Generated Answer + Sources
 ```
 
@@ -35,6 +35,7 @@ Generated Answer + Sources
 - **Semantic search**: find relevant content by meaning, not by keywords
 - **REST API**: FastAPI wrapper around the RAG pipeline for integration with other systems
 - **Full RAG pipeline**: end-to-end — from user query to answer with sources
+- **Automated evaluation**: Faithfulness and Relevancy metrics with LLM-as-judge
 
 ## 🛠️ Tech Stack
 
@@ -80,15 +81,14 @@ python step1_embeddings.py
 ```
 
 What it does:
-
-- Loads `.txt` files from `documents/`
+- Loads .txt files from documents/
 - Computes embeddings
 - Runs similarity search
 - Calls LLM and prints answer + sources
 
 ## 🌐 REST API
 
-`api.py` exposes a FastAPI service on top of the RAG pipeline:
+api.py exposes a FastAPI service on top of the RAG pipeline:
 
 - **POST /upload** — accept raw text or file, split into chunks, compute embeddings and store them in ChromaDB vector database
 - **POST /query** — accept a question, find top-K relevant chunks and generate an answer with sources
@@ -97,23 +97,23 @@ What it does:
 - **GET /stats** — show how many documents and chunks are currently loaded
 - **DELETE /reset** — clear the knowledge base
 
-**Run API:**
+Run API:
 
 ```bash
 uvicorn api:app --reload
 ```
 
-Open interactive docs at: [http://localhost:8000/docs](http://localhost:8000/docs)
+Open interactive docs at: http://localhost:8000/docs
 
 This allows using RAG as a standalone service that can be connected to chat-bots, frontends or internal tools.
 
 ## 📂 Add Your Own Documents
 
-1. Create `.txt` files in the `documents/` folder
+1. Create .txt files in the documents/ folder
 2. Run the script or API — documents will be automatically loaded and chunked
 3. Ask questions related to your content
 
-**Example:**
+Example:
 
 ```python
 # documents/python.txt
@@ -125,13 +125,13 @@ Python is a high-level programming language...
 Machine learning is a subset of AI...
 ```
 
-**CLI demo:**
+CLI demo:
 
 ```python
 rag_pipeline("What is Python used for?")
 ```
 
-**Sample output:**
+Sample output:
 
 ```
 ✅ ANSWER:
@@ -145,117 +145,102 @@ automation, and artificial intelligence.
 
 ### LangChain Integration
 
-- ✅ **Two approaches in one project**: Manual RAG + LangChain RAG side-by-side
-- ✅ **Fast prototyping**: LangChain endpoints for rapid development
-- ✅ **Comparison ready**: Test both approaches with same queries
+✅ Two approaches in one project: Manual RAG + LangChain RAG side-by-side  
+✅ Fast prototyping: LangChain endpoints for rapid development  
+✅ Comparison ready: Test both approaches with same queries
 
 ### ChromaDB Integration (v2.0)
 
-- ✅ **Persistent storage**: Embeddings saved to disk (`./chroma_db/`), survive restarts
-- ✅ **HNSW indexing**: Fast similarity search even with thousands of documents
-- ✅ **Metadata support**: Track source, chunk_id, total_chunks for each embedding
-- ✅ **Production-ready**: No more in-memory lists, scalable architecture
+✅ Persistent storage: Embeddings saved to disk (./chroma_db/), survive restarts  
+✅ HNSW indexing: Fast similarity search even with thousands of documents  
+✅ Metadata support: Track source, chunk_id, total_chunks for each embedding  
+✅ Production-ready: No more in-memory lists, scalable architecture
 
 ### Migration from v1.0
 
-**v1.0** used in-memory Python list to store embeddings:
-
+v1.0 used in-memory Python list to store embeddings:
 - Lost all data on restart
 - Slow linear search through all embeddings
 - Good for learning, not for production
 
-**v2.0+** uses ChromaDB:
-
+v2.0+ uses ChromaDB:
 - Data persists on disk
 - Optimized vector search with indexing
 - Ready for real-world usage
 
 To see v1.0 code: `git checkout v1.0`
 
-## 🧪 What I Learned
+## 🧪 Evaluation System
 
-### Core Concepts
+### Metrics
 
-- **Embeddings** — converting text into fixed-size vectors
-- **Cosine similarity** — similarity metric between vectors
-- **Semantic search** — finding documents by meaning
-- **RAG pipeline** — separating retrieval and generation
-- **Chunking & metadata** — splitting texts and tracking sources
-- **Vector databases** — specialized storage for embeddings with fast similarity search
-- **LangChain framework** — rapid prototyping vs manual implementation trade-offs
+- **Faithfulness**: 87.5% — checks if answer is grounded in retrieved documents (no hallucinations)
+- **Relevancy**: 89.6% — measures retrieval accuracy (correct documents found)
+- **Overall Score**: 88.5%
 
-### Implementation Details
+### How It Works
 
-- ~~Cosine similarity implemented manually~~ → **Replaced with ChromaDB HNSW indexing**
-- Embeddings and LLM calls via OpenRouter API
-- Documents loaded and chunked automatically
-- **Persistent storage** with ChromaDB (survives restarts)
-- Answers include source attribution
-- **Two parallel implementations** for comparison
+```bash
+python evaluate.py
+```
 
-## 📊 Project Evolution
+Automated evaluation using LLM-as-judge approach:
+- Test dataset with 8 questions (easy/medium/hard difficulty)
+- Each question tested against RAG system
+- LLM evaluates if answer is faithful and relevant
+- Results saved to evaluation_results.json
 
-This project evolved through multiple iterations:
+### Test Coverage
 
-**v1.0 → v2.0 → v2.1**
+- **Easy questions**: Direct facts from documents (100% accuracy)
+- **Medium questions**: Require reasoning across chunks (80% accuracy)
+- **Hard questions**: Out-of-scope queries (correctly responds "I don't know")
 
-- **v1.0:** Manual RAG with in-memory storage (learning phase)
-- **v2.0:** Added ChromaDB for production-ready persistent storage
-- **v2.1:** Integrated LangChain to compare manual vs framework approach
+### Why This Matters
 
-**Current features (v2.1):**
+- Tracks quality regressions when modifying RAG pipeline
+- Provides objective metrics for comparing different approaches
+- Essential for production systems (monitoring answer quality)
 
-- ✅ ChromaDB vector database with HNSW indexing
-- ✅ Persistent storage on disk
-- ✅ FastAPI REST API
-- ✅ Two parallel implementations (Manual + LangChain)
-- ✅ Full metadata tracking and source attribution
+### Interview Ready
 
-**What's next (v2.2):**
+**Q: How do you evaluate RAG quality?**  
+A: Using Faithfulness (grounding check) and Relevancy (retrieval accuracy) metrics. Automated with LLM-as-judge or manual ground truth dataset.
 
-- ⬜ Improved chunking strategies
-- ⬜ Basic monitoring and metrics
-- ⬜ Multiple document formats (PDF, DOCX)
+**Q: What is LLM-as-judge?**  
+A: Using LLM to evaluate another LLM's output. Fast automated evaluation alternative to manual labeling.
 
 ## 🔄 Two Approaches Comparison
 
-This project demonstrates **two ways to build RAG**:
+This project demonstrates two ways to build RAG:
 
-### 1️⃣ Manual RAG (`/query`)
+### 1️⃣ Manual RAG (/query)
 
 **Pros:**
-
 - Full control over every step
 - Easy to debug and customize
 - Understand how everything works
 
 **Cons:**
-
 - More code to write (~200 lines)
 - Need to handle errors manually
 
 **Use when:** Custom logic, learning, full flexibility needed
 
----
-
-### 2️⃣ LangChain RAG (`/query_langchain`)
+### 2️⃣ LangChain RAG (/query_langchain)
 
 **Pros:**
-
 - Fast development (~20 lines)
 - Built-in error handling
 - Production-ready patterns
 
 **Cons:**
-
 - Less control (black box)
 - Framework dependency
 
 **Use when:** Quick MVP, standard use case, time pressure
 
----
-
-### 📊 Live Comparison
+## 📊 Live Comparison
 
 Both endpoints work in parallel:
 
@@ -279,6 +264,54 @@ Starting with plain Python and minimal dependencies, then moving to frameworks. 
 
 > "Junior uses libraries. Middle understands what happens under the hood."
 
+## 🧠 What I Learned
+
+### Core Concepts
+
+- **Embeddings** — converting text into fixed-size vectors
+- **Cosine similarity** — similarity metric between vectors
+- **Semantic search** — finding documents by meaning
+- **RAG pipeline** — separating retrieval and generation
+- **Chunking & metadata** — splitting texts and tracking sources
+- **Vector databases** — specialized storage for embeddings with fast similarity search
+- **LangChain framework** — rapid prototyping vs manual implementation trade-offs
+- **RAG evaluation** — Faithfulness and Relevancy metrics, LLM-as-judge approach
+
+### Implementation Details
+
+- Cosine similarity implemented manually → Replaced with ChromaDB HNSW indexing
+- Embeddings and LLM calls via OpenRouter API
+- Documents loaded and chunked automatically
+- Persistent storage with ChromaDB (survives restarts)
+- Answers include source attribution
+- Two parallel implementations for comparison
+- Automated testing with evaluation metrics
+
+## 📊 Project Evolution
+
+This project evolved through multiple iterations:
+
+**v1.0 → v2.0 → v2.1**
+
+- **v1.0**: Manual RAG with in-memory storage (learning phase)
+- **v2.0**: Added ChromaDB for production-ready persistent storage
+- **v2.1**: Integrated LangChain + automated evaluation system
+
+### Current features (v2.1):
+
+✅ ChromaDB vector database with HNSW indexing  
+✅ Persistent storage on disk  
+✅ FastAPI REST API  
+✅ Two parallel implementations (Manual + LangChain)  
+✅ Full metadata tracking and source attribution  
+✅ Automated evaluation with Faithfulness and Relevancy metrics
+
+### What's next (v2.2):
+
+⬜ Improved chunking strategies  
+⬜ Basic monitoring and metrics  
+⬜ Multiple document formats (PDF, DOCX)
+
 ## 🎓 Interview Readiness
 
 Based on this project I can:
@@ -287,7 +320,9 @@ Based on this project I can:
 - Describe the RAG pipeline and why chunking is needed
 - Show working RAG + API code
 - Discuss where it makes sense to plug in a vector DB and monitoring
-- **Compare manual implementation vs framework approach**
+- Compare manual implementation vs framework approach
+- Explain RAG evaluation metrics (Faithfulness, Relevancy)
+- Demonstrate automated testing with LLM-as-judge
 
 ## 📝 Notes
 
@@ -297,5 +332,6 @@ Based on this project I can:
 
 ## 📧 Contact
 
-Built by **Vadim Titov** as part of transition to an AI/LLM Engineer role.  
+Built by Vadim Titov as part of transition to an AI/LLM Engineer role.
+
 Focus areas: RAG, automation, AI assistants for customer support.

@@ -1,0 +1,105 @@
+{
+  "results": [
+    {
+      "question": "What is Python and who created it?",
+      "difficulty": "easy",
+      "answer": "Python is a high-level programming language created by Guido van Rossum in 1991....",
+      "faithfulness": 1.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\machine_learning.txt",
+        "documents\\python.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "What are the main steps in the RAG process?",
+      "difficulty": "easy",
+      "answer": "The main steps in the RAG (Retrieval-Augmented Generation) process are:\n1) Conve...",
+      "faithfulness": 1.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\python.txt",
+        "documents\\machine_learning.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "What is the difference between machine learning and deep learning?",
+      "difficulty": "medium",
+      "answer": "Machine learning is a subset of artificial intelligence that involves training a...",
+      "faithfulness": 1.0,
+      "relevancy": 0.5,
+      "sources": [
+        "documents\\python.txt",
+        "documents\\machine_learning.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "Which frameworks can I use for both web development and machine learning in Python?",
+      "difficulty": "medium",
+      "answer": "One popular framework that can be used for both web development and machine lear...",
+      "faithfulness": 1.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\machine_learning.txt",
+        "documents\\python.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "What vector databases are mentioned for storing embeddings in RAG systems?",
+      "difficulty": "easy",
+      "answer": "Vector databases like Chroma and Pinecone are commonly used to store embeddings ...",
+      "faithfulness": 1.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\python.txt",
+        "documents\\machine_learning.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "List all machine learning libraries mentioned across the documents",
+      "difficulty": "medium",
+      "answer": "The machine learning libraries mentioned across the documents are TensorFlow, Py...",
+      "faithfulness": 1.0,
+      "relevancy": 0.6666666666666666,
+      "sources": [
+        "documents\\python.txt",
+        "documents\\machine_learning.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "How does RAG improve LLM responses?",
+      "difficulty": "medium",
+      "answer": "RAG (Retrieval-Augmented Generation) improves Large Language Model (LLM) respons...",
+      "faithfulness": 1.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\python.txt",
+        "documents\\machine_learning.txt",
+        "documents\\rag_systems.txt"
+      ]
+    },
+    {
+      "question": "What is the best programming language for quantum computing?",
+      "difficulty": "hard",
+      "answer": "I don't know the answer to that question....",
+      "faithfulness": 0.0,
+      "relevancy": 1.0,
+      "sources": [
+        "documents\\machine_learning.txt",
+        "documents\\python.txt",
+        "documents\\rag_systems.txt"
+      ]
+    }
+  ],
+  "metrics": {
+    "faithfulness": 0.875,
+    "relevancy": 0.8958333333333334,
+    "overall": 0.8854166666666667
+  }
+}

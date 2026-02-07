@@ -1,0 +1,51 @@
+[
+  {
+    "question": "What is Python and who created it?",
+    "ground_truth": "Python is a high-level programming language created by Guido van Rossum in 1991",
+    "expected_sources": ["python"],
+    "difficulty": "easy"
+  },
+  {
+    "question": "What are the main steps in the RAG process?",
+    "ground_truth": "Converting documents to embeddings, finding relevant documents, generating answers",
+    "expected_sources": ["rag"],
+    "difficulty": "easy"
+  },
+  {
+    "question": "What is the difference between machine learning and deep learning?",
+    "ground_truth": "Deep learning is a subset of machine learning that uses multi-layered neural networks for complex tasks",
+    "expected_sources": ["machine_learning", "machine learning"],
+    "difficulty": "medium"
+  },
+  {
+    "question": "Which frameworks can I use for both web development and machine learning in Python?",
+    "ground_truth": "Django for web development and PyTorch for machine learning",
+    "expected_sources": ["python"],
+    "difficulty": "medium"
+  },
+  {
+    "question": "What vector databases are mentioned for storing embeddings in RAG systems?",
+    "ground_truth": "Chroma and Pinecone",
+    "expected_sources": ["rag"],
+    "difficulty": "easy"
+  },
+  {
+    "question": "List all machine learning libraries mentioned across the documents",
+    "ground_truth": "TensorFlow, PyTorch, scikit-learn",
+    "expected_sources": ["machine_learning", "machine learning", "python"],
+    "difficulty": "medium"
+  },
+  {
+    "question": "How does RAG improve LLM responses?",
+    "ground_truth": "RAG combines semantic search with LLMs to answer questions using external knowledge instead of relying only on training data",
+    "expected_sources": ["rag"],
+    "difficulty": "medium"
+  },
+  {
+    "question": "What is the best programming language for quantum computing?",
+    "ground_truth": "Information not available in documents",
+    "expected_sources": [],
+    "difficulty": "hard",
+    "note": "Edge case: info not in documents - tests hallucination"
+  }
+]
