@@ -2,12 +2,13 @@
 
 **Version:** 2.1 | **Status:** Production-ready with ChromaDB + LangChain + Evaluation
 
-Minimal Retrieval-Augmented Generation (RAG) system built from scratch, to understand how everything works under the hood without LangChain and heavy frameworks.
+Retrieval-Augmented Generation (RAG) system with dual implementation: 
+from-scratch approach and LangChain integration for comparison.
 
 ## 🎯 Project Goal
 
-Show practical understanding of RAG fundamentals: embeddings, similarity search, retrieval, answer generation with sources.  
-This project is part of my learning path towards an AI/LLM Engineer role.
+Production-ready RAG system demonstrating both manual implementation and 
+framework-based approach with automated quality evaluation.  
 
 ## 🏗️ Architecture
 
@@ -161,7 +162,7 @@ automation, and artificial intelligence.
 v1.0 used in-memory Python list to store embeddings:
 - Lost all data on restart
 - Slow linear search through all embeddings
-- Good for learning, not for production
+- Good for prototyping, not for production
 
 v2.0+ uses ChromaDB:
 - Data persists on disk
@@ -202,13 +203,6 @@ Automated evaluation using LLM-as-judge approach:
 - Provides objective metrics for comparing different approaches
 - Essential for production systems (monitoring answer quality)
 
-### Interview Ready
-
-**Q: How do you evaluate RAG quality?**  
-A: Using Faithfulness (grounding check) and Relevancy (retrieval accuracy) metrics. Automated with LLM-as-judge or manual ground truth dataset.
-
-**Q: What is LLM-as-judge?**  
-A: Using LLM to evaluate another LLM's output. Fast automated evaluation alternative to manual labeling.
 
 ## 🔄 Two Approaches Comparison
 
@@ -260,11 +254,9 @@ Starting with plain Python and minimal dependencies, then moving to frameworks. 
 
 - Clear understanding of how RAG works inside
 - Ability to debug and optimize the pipeline for specific products
-- Confidence in technical interviews when asked "what's inside LangChain?"
 
-> "Junior uses libraries. Middle understands what happens under the hood."
 
-## 🧠 What I Learned
+## 🔧 Technical Highlights
 
 ### Core Concepts
 
@@ -293,7 +285,7 @@ This project evolved through multiple iterations:
 
 **v1.0 → v2.0 → v2.1**
 
-- **v1.0**: Manual RAG with in-memory storage (learning phase)
+- **v1.0**: Manual RAG with in-memory storage (prototype phase)
 - **v2.0**: Added ChromaDB for production-ready persistent storage
 - **v2.1**: Integrated LangChain + automated evaluation system
 
@@ -312,26 +304,8 @@ This project evolved through multiple iterations:
 ⬜ Basic monitoring and metrics  
 ⬜ Multiple document formats (PDF, DOCX)
 
-## 🎓 Interview Readiness
-
-Based on this project I can:
-
-- Explain the difference between keyword search and semantic search
-- Describe the RAG pipeline and why chunking is needed
-- Show working RAG + API code
-- Discuss where it makes sense to plug in a vector DB and monitoring
-- Compare manual implementation vs framework approach
-- Explain RAG evaluation metrics (Faithfulness, Relevancy)
-- Demonstrate automated testing with LLM-as-judge
-
-## 📝 Notes
-
-- This is a learning project, not a full production solution
-- API keys are not included in the repo — use your own via environment variables
-- Built as part of an intensive learning path to transition into AI/LLM Engineering
 
 ## 📧 Contact
+ 
+GitHub: @Vadtop
 
-Built by Vadim Titov as part of transition to an AI/LLM Engineer role.
-
-Focus areas: RAG, automation, AI assistants for customer support.
