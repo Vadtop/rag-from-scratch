@@ -306,6 +306,28 @@ def reset():
     return {"status": "success", "message": "Database cleared"}
 
 
+# ========== LANGCHAIN RAG ENDPOINT ==========
+
+_langchain_rag = None
+
+def _get_langchain_rag():
+    global _langchain_rag
+    if _langchain_rag is None:
+        from step2_langchain import LangChainRAG
+        _langchain_rag = LangChainRAG()
+    return _langchain_rag
+
+@app.post("/query_langchain")
+def query_langchain(req: QueryRequest):
+    """Отвечает на вопрос используя LangChain RAG"""
+    result = _get_langchain_rag().query(req.query)
+    return {
+        "answer": result["answer"],
+        "sources": result["sources"],
+        "method": "langchain",
+        "chunks_used": result.get("chunks_used", 0)
+    }
+
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
