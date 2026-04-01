@@ -34,14 +34,20 @@ def _get_sheet():
             "https://www.googleapis.com/auth/drive",
         ]
 
-        creds_path = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "credentials.json")
         sheet_id = os.environ.get("GOOGLE_SHEETS_ID", "")
 
         if not sheet_id:
             logger.warning("GOOGLE_SHEETS_ID not set — sheets logging disabled")
             return None
 
-        creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
+        # Поддержка двух форматов: JSON-строка или путь к файлу
+        creds_env = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+        if creds_env.strip().startswith("{"):
+            creds_info = json.loads(creds_env)
+            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        else:
+            creds_path = creds_env or "credentials.json"
+            creds = Credentials.from_service_account_file(creds_path, scopes=scopes)
         client = gspread.authorize(creds)
         spreadsheet = client.open_by_key(sheet_id)
 
