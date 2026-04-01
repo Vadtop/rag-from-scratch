@@ -25,6 +25,9 @@ def _get_sheet():
     if _sheet is not None:
         return _sheet
 
+    creds_env = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+    logger.warning("GS DEBUG: creds starts with: %r", creds_env[:30] if creds_env else "EMPTY")
+
     try:
         import gspread
         from google.oauth2.service_account import Credentials
@@ -42,7 +45,6 @@ def _get_sheet():
 
         # Поддержка двух форматов: JSON-строка или путь к файлу
         creds_env = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
-        logger.info("CREDS_ENV first 20 chars: %r", creds_env[:20] if creds_env else "EMPTY")
         if creds_env.strip().startswith("{"):
             creds_info = json.loads(creds_env)
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
