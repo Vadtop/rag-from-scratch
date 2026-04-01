@@ -81,19 +81,17 @@ class QueryResponse(BaseModel):
 def root():
     return {
         "message": "RAG API",
-        "version": "2.1",
+        "version": "3.0",
         "endpoints": {
-            "POST /upload": "Upload document (Manual RAG)",
-            "POST /query": "Ask question (Manual RAG)",
-            "POST /upload_langchain": "Upload document (LangChain RAG)",
-            "POST /query_langchain": "Ask question (LangChain RAG)",
-            "GET /stats": "Get statistics",
-            "DELETE /reset": "Clear database"
+            "POST /upload": "Upload document to knowledge base",
+            "POST /query": "Ask question (RAG + Google Sheets logging)",
+            "POST /agent": "Multi-turn dialog agent with memory",
+            "DELETE /agent/{session_id}": "Clear dialog session",
+            "POST /query_langchain": "Ask question via LangChain RAG",
+            "GET /stats": "Get knowledge base statistics",
+            "DELETE /reset": "Clear knowledge base"
         },
-        "approaches": {
-            "manual": "Full control, custom logic (v2.0)",
-            "langchain": "Fast development, framework benefits (v2.1)"
-        }
+        "model": "deepseek/deepseek-chat via OpenRouter"
     }
 
 @app.post("/upload")
