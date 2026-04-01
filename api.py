@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import requests
 import numpy as np
@@ -93,6 +94,97 @@ def root():
         },
         "model": "deepseek/deepseek-chat via OpenRouter"
     }
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_ui():
+    return """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Agent</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 16px 24px; background: #1a1a1a; border-bottom: 1px solid #2a2a2a; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 12px; color: #666; background: #2a2a2a; padding: 3px 8px; border-radius: 12px; }
+  #messages { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .msg { max-width: 75%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 14px; }
+  .msg.user { align-self: flex-end; background: #2563eb; color: white; border-bottom-right-radius: 4px; }
+  .msg.bot { align-self: flex-start; background: #1e1e1e; border: 1px solid #2a2a2a; border-bottom-left-radius: 4px; }
+  .msg.bot .sources { margin-top: 8px; font-size: 12px; color: #666; }
+  .typing { color: #666; font-style: italic; font-size: 13px; }
+  #input-area { padding: 16px 24px; background: #1a1a1a; border-top: 1px solid #2a2a2a; display: flex; gap: 10px; }
+  #input { flex: 1; background: #2a2a2a; border: 1px solid #333; border-radius: 8px; padding: 10px 14px; color: #e0e0e0; font-size: 14px; outline: none; }
+  #input:focus { border-color: #2563eb; }
+  button { background: #2563eb; color: white; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 500; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #333; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RAG Agent</h1>
+  <span>DeepSeek + ChromaDB</span>
+</header>
+<div id="messages">
+  <div class="msg bot">Привет! Я AI-агент с базой знаний. Спроси меня про RAG, AI-агентов, Python или машинное обучение.</div>
+</div>
+<div id="input-area">
+  <input id="input" type="text" placeholder="Задай вопрос..." onkeydown="if(event.key==='Enter') send()">
+  <button id="btn" onclick="send()">Отправить</button>
+</div>
+<script>
+const SESSION_ID = 'session_' + Math.random().toString(36).substr(2, 9);
+async function send() {
+  const input = document.getElementById('input');
+  const btn = document.getElementById('btn');
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = '';
+  btn.disabled = true;
+  addMsg(query, 'user');
+  const typing = addMsg('Думаю...', 'bot typing');
+  try {
+    const res = await fetch('/agent', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query, session_id: SESSION_ID})
+    });
+    const data = await res.json();
+    typing.remove();
+    const sources = data.sources && data.sources.length ? '<div class="sources">Источники: ' + data.sources.join(', ') + '</div>' : '';
+    addMsgHtml(data.answer.replace(/\\n/g, '<br>') + sources, 'bot');
+  } catch(e) {
+    typing.remove();
+    addMsg('Ошибка соединения', 'bot');
+  }
+  btn.disabled = false;
+  input.focus();
+}
+function addMsg(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  document.getElementById('messages').appendChild(div);
+  div.scrollIntoView();
+  return div;
+}
+function addMsgHtml(html, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.innerHTML = html;
+  document.getElementById('messages').appendChild(div);
+  div.scrollIntoView();
+  return div;
+}
+</script>
+</body>
+</html>
+"""
+
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
