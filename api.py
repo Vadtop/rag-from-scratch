@@ -5,14 +5,19 @@ import numpy as np
 import os
 from dotenv import load_dotenv
 from vector_store import VectorStore
+from google_sheets import log_query
 
 load_dotenv()  # читаем OPENROUTER_API_KEY из .env
 
-app = FastAPI(title="RAG API", version="2.0")
+app = FastAPI(title="RAG API", version="3.0")
 
 # ========== НАСТРОЙКИ ==========
 API_KEY = os.environ["OPENROUTER_API_KEY"]
 BASE_URL = "https://openrouter.ai/api/v1"
+LLM_MODEL = "deepseek/deepseek-chat"  # дешевле, через OpenRouter
+
+# Память диалога для /agent endpoint (in-memory, per session)
+_agent_sessions: dict[str, list] = {}
 
 
 # Глобальное хранилище chunks (в памяти)
@@ -41,7 +46,7 @@ def get_completion(messages):
             "Content-Type": "application/json"
         },
         json={
-            "model": "openai/gpt-3.5-turbo",
+            "model": LLM_MODEL,
             "messages": messages,
             "temperature": 0
         }
@@ -179,11 +184,108 @@ Answer (be concise):"""
         for meta, dist in zip(metadatas, distances)
     ]
     
+    # Логируем в Google Sheets
+    log_query(
+        question=req.query,
+        answer=answer,
+        sources=sources,
+        model=LLM_MODEL,
+        chunks_used=len(chunks_used),
+    )
+
     return QueryResponse(
         answer=answer,
         sources=sources,
         chunks_used=chunks_used
     )
+
+
+# ========== AI AGENT ENDPOINT ==========
+
+class AgentRequest(BaseModel):
+    query: str
+    session_id: str = "default"  # для multi-turn диалога
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    sources: list
+    session_id: str
+    turn: int
+
+
+@app.post("/agent", response_model=AgentResponse)
+def agent_query(req: AgentRequest):
+    """
+    AI-агент с памятью диалога.
+    Использует RAG для поиска контекста + помнит историю разговора.
+    Логирует каждый вопрос/ответ в Google Sheets.
+    """
+    # Инициализация сессии
+    if req.session_id not in _agent_sessions:
+        _agent_sessions[req.session_id] = []
+
+    history = _agent_sessions[req.session_id]
+
+    # RAG: найти релевантный контекст
+    context = ""
+    sources = []
+    if vector_store.count() > 0:
+        query_emb = get_embedding(req.query)
+        results = vector_store.search(query_emb, top_k=3)
+        documents = results["documents"][0]
+        metadatas = results["metadatas"][0]
+        context_parts = [
+            f"[{m['source']}] {d}" for d, m in zip(documents, metadatas)
+        ]
+        context = "\n\n".join(context_parts)
+        sources = list(set(m["source"] for m in metadatas))
+
+    # Системный промпт
+    system_prompt = (
+        "Ты AI-агент с доступом к базе знаний. "
+        "Отвечай на вопросы используя предоставленный контекст. "
+        "Если контекста нет — отвечай из общих знаний, но предупреди об этом. "
+        "Помни историю диалога."
+    )
+    if context:
+        system_prompt += f"\n\nБаза знаний:\n{context}"
+
+    # Сборка messages: system + история + новый вопрос
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history[-10:])  # последние 10 сообщений
+    messages.append({"role": "user", "content": req.query})
+
+    # LLM ответ
+    answer = get_completion(messages)
+
+    # Сохранить в историю
+    history.append({"role": "user", "content": req.query})
+    history.append({"role": "assistant", "content": answer})
+
+    # Логировать в Google Sheets
+    log_query(
+        question=req.query,
+        answer=answer,
+        sources=sources,
+        model=LLM_MODEL,
+        chunks_used=len(sources),
+    )
+
+    return AgentResponse(
+        answer=answer,
+        sources=sources,
+        session_id=req.session_id,
+        turn=len(history) // 2,
+    )
+
+
+@app.delete("/agent/{session_id}")
+def clear_session(session_id: str):
+    """Очистить историю диалога сессии."""
+    _agent_sessions.pop(session_id, None)
+    return {"status": "cleared", "session_id": session_id}
+
 
 @app.get("/stats")
 def get_stats():
