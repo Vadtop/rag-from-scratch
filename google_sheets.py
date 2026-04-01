@@ -42,6 +42,7 @@ def _get_sheet():
 
         # Поддержка двух форматов: JSON-строка или путь к файлу
         creds_env = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
+        logger.info("CREDS_ENV first 20 chars: %r", creds_env[:20] if creds_env else "EMPTY")
         if creds_env.strip().startswith("{"):
             creds_info = json.loads(creds_env)
             creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
