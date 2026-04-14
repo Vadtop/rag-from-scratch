@@ -1,0 +1,11 @@
+.env
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.json
+chroma_db/
+chroma_langchain_db/
+documents/
+README.md
+*.png
