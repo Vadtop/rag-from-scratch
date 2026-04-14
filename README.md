@@ -76,9 +76,13 @@ Live demo: https://rag-from-scratch-production.up.railway.app/chat
 | POST | `/upload` | Upload document to knowledge base |
 | POST | `/query` | Ask question (RAG via OpenRouter API) |
 | POST | `/query_hf` | Ask question (RAG via local HuggingFace model, no API needed) |
+| POST | `/query_advanced` | Advanced RAG: rerank + guardrails + metrics |
 | POST | `/structured` | Structured JSON output from Pydantic schema + local LLM |
 | GET | `/embeddings/info` | Local embedding model info |
 | POST | `/embeddings` | Compute embeddings (sentence-transformers, no API) |
+| POST | `/rerank` | Rerank documents by relevance |
+| POST | `/guardrails` | Check answer for PII/refusals/length |
+| POST | `/metrics` | Compute RAG quality (relevancy, faithfulness, recall@k) |
 | POST | `/agent` | AI agent with dialog memory |
 | DELETE | `/agent/{session_id}` | Clear session history |
 | POST | `/query_langchain` | Ask via LangChain RAG |
@@ -156,6 +160,7 @@ python evaluate.py
 - **v2.1** — LangChain + auto quality evaluation
 - **v3.0** — AI agent with dialog memory + Google Sheets logging
 - **v3.1** — HuggingFace local model + sentence-transformers embeddings + Structured Output
+- **v3.2** — Advanced RAG: reranker, guardrails (PII/refusal/length), embedding cache + batch, quality metrics
 
 ---
 

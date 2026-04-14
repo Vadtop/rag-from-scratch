@@ -13,6 +13,7 @@ from huggingface_rag import (
     generate as hf_generate,
     generate_structured,
 )
+from advanced_rag import rerank, guardrails_check, compute_rag_metrics
 
 load_dotenv()  # читаем OPENROUTER_API_KEY из .env
 
@@ -97,6 +98,10 @@ def root():
             "POST /structured": "Structured JSON output from schema + local LLM",
             "GET /embeddings/info": "Embedding model info",
             "POST /embeddings": "Compute embeddings (local sentence-transformers)",
+            "POST /query_advanced": "Advanced RAG: rerank + guardrails + metrics",
+            "POST /rerank": "Rerank documents by relevance",
+            "POST /guardrails": "Check answer for PII/refusals",
+            "POST /metrics": "Compute RAG quality metrics",
             "GET /stats": "Get knowledge base statistics",
             "DELETE /reset": "Clear knowledge base",
         },
@@ -519,6 +524,112 @@ def compute_embeddings(texts: list[str]):
         "count": len(embs),
         "embeddings": embs,
     }
+
+
+# ========== ADVANCED RAG ENDPOINTS ==========
+
+
+class AdvancedQueryRequest(BaseModel):
+    query: str
+    top_k: int = 10
+    rerank_top_k: int = 3
+
+
+class AdvancedQueryResponse(BaseModel):
+    answer: str
+    reranked_sources: list[dict]
+    guardrails: dict
+    metrics: dict
+    model: str = "Qwen2.5-1.5B-Instruct (local HuggingFace)"
+
+
+class MetricsRequest(BaseModel):
+    query: str
+    answer: str
+    context_chunks: list[str]
+    ground_truth: str | None = None
+
+
+@app.post("/query_advanced", response_model=AdvancedQueryResponse)
+def query_advanced(req: AdvancedQueryRequest):
+    """Advanced RAG: vector search → reranking → LLM → guardrails check → metrics."""
+    if vector_store.count() == 0:
+        return AdvancedQueryResponse(
+            answer="No documents uploaded yet.",
+            reranked_sources=[],
+            guardrails={"safe": True, "issues": []},
+            metrics={"answer_relevancy": 0, "faithfulness": 0, "recall_at_k": 0},
+        )
+
+    query_emb = get_embedding(req.query)
+    results = vector_store.search(query_emb, top_k=req.top_k)
+
+    documents = results["documents"][0]
+    metadatas = results["metadatas"][0]
+
+    reranked = rerank(req.query, documents, top_k=req.rerank_top_k)
+
+    context_parts = []
+    for item in reranked:
+        idx = item["index"]
+        meta = metadatas[idx]
+        context_parts.append(
+            f"[{meta['source']}, chunk {meta['chunk_id'] + 1}]\n{item['document']}"
+        )
+
+    context = "\n\n---\n\n".join(context_parts)
+
+    prompt = (
+        f"Answer the question based on this context.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {req.query}\n\n"
+        f"Answer (be concise, use only the context):"
+    )
+
+    answer = hf_generate(prompt, max_new_tokens=256, temperature=0.3)
+
+    guard_result = guardrails_check(answer)
+
+    context_chunks = [item["document"] for item in reranked]
+    metrics = compute_rag_metrics(req.query, answer, context_chunks)
+
+    reranked_sources = [
+        {
+            "source": metadatas[item["index"]]["source"],
+            "score": round(item["score"], 4),
+            "chunk_rank": i + 1,
+        }
+        for i, item in enumerate(reranked)
+    ]
+
+    return AdvancedQueryResponse(
+        answer=answer,
+        reranked_sources=reranked_sources,
+        guardrails=guard_result,
+        metrics=metrics,
+    )
+
+
+@app.post("/metrics")
+def evaluate_metrics(req: MetricsRequest):
+    """Compute RAG quality metrics: answer relevancy, faithfulness, recall@k."""
+    metrics = compute_rag_metrics(
+        req.query, req.answer, req.context_chunks, req.ground_truth
+    )
+    return {"metrics": metrics}
+
+
+@app.post("/guardrails")
+def check_guardrails(answer: str):
+    """Check answer for PII, refusals, length issues."""
+    return guardrails_check(answer)
+
+
+@app.post("/rerank")
+def rerank_endpoint(query: str, documents: list[str], top_k: int = 3):
+    """Rerank documents by relevance to query using cross-encoder scoring."""
+    results = rerank(query, documents, top_k=top_k)
+    return {"reranked": results}
 
 
 # ========== ЗАПУСК ==========
