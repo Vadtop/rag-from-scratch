@@ -7,6 +7,12 @@ import os
 from dotenv import load_dotenv
 from vector_store import VectorStore
 from google_sheets import log_query
+from huggingface_rag import (
+    embed_query,
+    embed_texts,
+    generate as hf_generate,
+    generate_structured,
+)
 
 load_dotenv()  # читаем OPENROUTER_API_KEY из .env
 
@@ -24,35 +30,31 @@ _agent_sessions: dict[str, list] = {}
 # Глобальное хранилище chunks (в памяти)
 vector_store = VectorStore()
 
+
 # ========== API ФУНКЦИИ ==========
 def get_embedding(text):
     response = requests.post(
         f"{BASE_URL}/embeddings",
         headers={
             "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         },
-        json={
-            "model": "openai/text-embedding-3-small",
-            "input": text
-        }
+        json={"model": "openai/text-embedding-3-small", "input": text},
     )
     return response.json()["data"][0]["embedding"]
+
 
 def get_completion(messages):
     response = requests.post(
         f"{BASE_URL}/chat/completions",
         headers={
             "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         },
-        json={
-            "model": LLM_MODEL,
-            "messages": messages,
-            "temperature": 0
-        }
+        json={"model": LLM_MODEL, "messages": messages, "temperature": 0},
     )
     return response.json()["choices"][0]["message"]["content"]
+
 
 # ========== CHUNKING ==========
 def chunk_text(text, chunk_size=500, overlap=100):
@@ -63,7 +65,7 @@ def chunk_text(text, chunk_size=500, overlap=100):
         chunk = text[start:end]
         if chunk.strip():
             chunks_list.append(chunk)
-        start += (chunk_size - overlap)
+        start += chunk_size - overlap
     return chunks_list
 
 
@@ -72,10 +74,12 @@ class QueryRequest(BaseModel):
     query: str
     top_k: int = 3
 
+
 class QueryResponse(BaseModel):
     answer: str
     sources: list
     chunks_used: list
+
 
 # ========== ENDPOINTS ==========
 @app.get("/")
@@ -89,11 +93,16 @@ def root():
             "POST /agent": "Multi-turn dialog agent with memory",
             "DELETE /agent/{session_id}": "Clear dialog session",
             "POST /query_langchain": "Ask question via LangChain RAG",
+            "POST /query_hf": "RAG with local HuggingFace model (no API needed)",
+            "POST /structured": "Structured JSON output from schema + local LLM",
+            "GET /embeddings/info": "Embedding model info",
+            "POST /embeddings": "Compute embeddings (local sentence-transformers)",
             "GET /stats": "Get knowledge base statistics",
-            "DELETE /reset": "Clear knowledge base"
+            "DELETE /reset": "Clear knowledge base",
         },
-        "model": "deepseek/deepseek-chat via OpenRouter"
+        "model": "deepseek/deepseek-chat via OpenRouter",
     }
+
 
 @app.get("/chat", response_class=HTMLResponse)
 def chat_ui():
@@ -189,20 +198,20 @@ function addMsgHtml(html, cls) {
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     """Загружает документ и создаёт embeddings"""
-    
+
     # Читаем файл
     content = await file.read()
     text = content.decode("utf-8")
-    
+
     # Chunking
     text_chunks = chunk_text(text, chunk_size=500, overlap=100)
-    
+
     # Создаём embeddings и сохраняем в ChromaDB
     for i, chunk in enumerate(text_chunks):
         embedding = get_embedding(chunk)
-        
+
         chunk_id = f"{file.filename}_chunk_{i}"
-        
+
         vector_store.add_chunk(
             chunk_id=chunk_id,
             content=chunk,
@@ -210,48 +219,49 @@ async def upload_document(file: UploadFile = File(...)):
             metadata={
                 "source": file.filename,
                 "chunk_id": i,
-                "total_chunks": len(text_chunks)
-            }
+                "total_chunks": len(text_chunks),
+            },
         )
-    
+
     return {
         "status": "success",
         "filename": file.filename,
         "chunks_created": len(text_chunks),
-        "total_chunks_in_db": vector_store.count()
+        "total_chunks_in_db": vector_store.count(),
     }
+
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
     """Отвечает на вопрос используя RAG"""
-    
+
     if vector_store.count() == 0:
         return QueryResponse(
             answer="No documents uploaded yet. Please upload documents first.",
             sources=[],
-            chunks_used=[]
+            chunks_used=[],
         )
-    
+
     # Embedding запроса
     query_emb = get_embedding(req.query)
-    
+
     # Поиск через ChromaDB
     results = vector_store.search(query_emb, top_k=req.top_k)
-    
+
     # Извлекаем данные из результатов
-    documents = results['documents'][0]  # list of texts
-    metadatas = results['metadatas'][0]  # list of metadata dicts
-    distances = results['distances'][0]  # list of distances (lower = better)
-    
+    documents = results["documents"][0]  # list of texts
+    metadatas = results["metadatas"][0]  # list of metadata dicts
+    distances = results["distances"][0]  # list of distances (lower = better)
+
     # Формируем контекст
     context_parts = []
     for i, (doc, meta) in enumerate(zip(documents, metadatas)):
         context_parts.append(
-            f"[{meta['source']}, chunk {meta['chunk_id']+1}/{meta['total_chunks']}]\n{doc}"
+            f"[{meta['source']}, chunk {meta['chunk_id'] + 1}/{meta['total_chunks']}]\n{doc}"
         )
-    
+
     context = "\n\n---\n\n".join(context_parts)
-    
+
     # Генерация
     prompt = f"""Answer the question based on this context.
 
@@ -261,19 +271,19 @@ Context:
 Question: {req.query}
 
 Answer (be concise):"""
-    
+
     answer = get_completion([{"role": "user", "content": prompt}])
-    
-    sources = list(set([meta['source'] for meta in metadatas]))
+
+    sources = list(set([meta["source"] for meta in metadatas]))
     chunks_used = [
         {
-            "source": meta['source'],
-            "chunk_id": meta['chunk_id'] + 1,
-            "distance": float(f"{dist:.3f}")
+            "source": meta["source"],
+            "chunk_id": meta["chunk_id"] + 1,
+            "distance": float(f"{dist:.3f}"),
         }
         for meta, dist in zip(metadatas, distances)
     ]
-    
+
     # Логируем в Google Sheets
     log_query(
         question=req.query,
@@ -283,14 +293,11 @@ Answer (be concise):"""
         chunks_used=len(chunks_used),
     )
 
-    return QueryResponse(
-        answer=answer,
-        sources=sources,
-        chunks_used=chunks_used
-    )
+    return QueryResponse(answer=answer, sources=sources, chunks_used=chunks_used)
 
 
 # ========== AI AGENT ENDPOINT ==========
+
 
 class AgentRequest(BaseModel):
     query: str
@@ -325,9 +332,7 @@ def agent_query(req: AgentRequest):
         results = vector_store.search(query_emb, top_k=3)
         documents = results["documents"][0]
         metadatas = results["metadatas"][0]
-        context_parts = [
-            f"[{m['source']}] {d}" for d, m in zip(documents, metadatas)
-        ]
+        context_parts = [f"[{m['source']}] {d}" for d, m in zip(documents, metadatas)]
         context = "\n\n".join(context_parts)
         sources = list(set(m["source"] for m in metadatas))
 
@@ -381,11 +386,11 @@ def clear_session(session_id: str):
 def get_stats():
     """Статистика базы знаний"""
     sources = vector_store.get_all_sources()
-    
+
     return {
         "total_chunks": vector_store.count(),
         "total_documents": len(sources),
-        "documents": sources
+        "documents": sources,
     }
 
 
@@ -400,12 +405,15 @@ def reset():
 
 _langchain_rag = None
 
+
 def _get_langchain_rag():
     global _langchain_rag
     if _langchain_rag is None:
         from step2_langchain import LangChainRAG
+
         _langchain_rag = LangChainRAG()
     return _langchain_rag
+
 
 @app.post("/query_langchain")
 def query_langchain(req: QueryRequest):
@@ -415,11 +423,106 @@ def query_langchain(req: QueryRequest):
         "answer": result["answer"],
         "sources": result["sources"],
         "method": "langchain",
-        "chunks_used": result.get("chunks_used", 0)
+        "chunks_used": result.get("chunks_used", 0),
+    }
+
+
+# ========== HUGGINGFACE RAG ENDPOINTS ==========
+
+
+class HFQueryRequest(BaseModel):
+    query: str
+    top_k: int = 3
+
+
+class HFQueryResponse(BaseModel):
+    answer: str
+    sources: list
+    chunks_used: int
+    model: str = "Qwen2.5-1.5B-Instruct (local HuggingFace)"
+
+
+class StructuredRequest(BaseModel):
+    prompt: str
+    schema: dict
+
+
+class StructuredResponse(BaseModel):
+    result: dict
+    model: str = "Qwen2.5-1.5B-Instruct (local HuggingFace)"
+
+
+@app.post("/query_hf", response_model=HFQueryResponse)
+def query_hf(req: HFQueryRequest):
+    """RAG with local HuggingFace model + sentence-transformers embeddings (no API needed)."""
+    if vector_store.count() == 0:
+        return HFQueryResponse(
+            answer="No documents uploaded yet.", sources=[], chunks_used=0
+        )
+
+    query_emb = embed_query(req.query)
+    results = vector_store.search(query_emb, top_k=req.top_k)
+
+    documents = results["documents"][0]
+    metadatas = results["metadatas"][0]
+    distances = results["distances"][0]
+
+    context_parts = []
+    for doc, meta in zip(documents, metadatas):
+        context_parts.append(
+            f"[{meta['source']}, chunk {meta['chunk_id'] + 1}/{meta['total_chunks']}]\n{doc}"
+        )
+
+    context = "\n\n---\n\n".join(context_parts)
+
+    prompt = (
+        f"Answer the question based on this context.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {req.query}\n\n"
+        f"Answer (be concise):"
+    )
+
+    answer = hf_generate(prompt, max_new_tokens=256, temperature=0.3)
+    sources = list(set(meta["source"] for meta in metadatas))
+
+    return HFQueryResponse(answer=answer, sources=sources, chunks_used=len(documents))
+
+
+@app.post("/structured", response_model=StructuredResponse)
+def structured_output(req: StructuredRequest):
+    """Generate structured JSON output from a Pydantic-style schema using local HuggingFace model."""
+    result = generate_structured(req.prompt, req.schema, max_new_tokens=512)
+    return StructuredResponse(result=result)
+
+
+@app.get("/embeddings/info")
+def embeddings_info():
+    """Info about the local embedding model."""
+    from huggingface_rag import get_embedding_model
+
+    model = get_embedding_model()
+    return {
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dimension": model.get_sentence_embedding_dimension(),
+        "max_seq_length": model.max_seq_length,
+        "provider": "HuggingFace (local, no API)",
+    }
+
+
+@app.post("/embeddings")
+def compute_embeddings(texts: list[str]):
+    """Compute embeddings for a list of texts using local sentence-transformers."""
+    embs = embed_texts(texts)
+    return {
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dimension": len(embs[0]),
+        "count": len(embs),
+        "embeddings": embs,
     }
 
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8000)

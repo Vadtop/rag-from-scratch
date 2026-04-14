@@ -74,7 +74,11 @@ Live demo: https://rag-from-scratch-production.up.railway.app/chat
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/upload` | Upload document to knowledge base |
-| POST | `/query` | Ask question (RAG) |
+| POST | `/query` | Ask question (RAG via OpenRouter API) |
+| POST | `/query_hf` | Ask question (RAG via local HuggingFace model, no API needed) |
+| POST | `/structured` | Structured JSON output from Pydantic schema + local LLM |
+| GET | `/embeddings/info` | Local embedding model info |
+| POST | `/embeddings` | Compute embeddings (sentence-transformers, no API) |
 | POST | `/agent` | AI agent with dialog memory |
 | DELETE | `/agent/{session_id}` | Clear session history |
 | POST | `/query_langchain` | Ask via LangChain RAG |
@@ -137,7 +141,8 @@ python evaluate.py
 
 - Python 3.11, FastAPI, uvicorn
 - ChromaDB (vector DB, HNSW indexing)
-- OpenRouter API (DeepSeek + embeddings)
+- **HuggingFace** — local LLM (Qwen2.5-1.5B-Instruct) + embeddings (sentence-transformers/all-MiniLM-L6-v2)
+- OpenRouter API (DeepSeek + embeddings — alternative, API-based)
 - LangChain (alternative RAG implementation)
 - gspread (Google Sheets integration)
 - Docker + docker-compose
@@ -150,6 +155,7 @@ python evaluate.py
 - **v2.0** — ChromaDB, persistent storage
 - **v2.1** — LangChain + auto quality evaluation
 - **v3.0** — AI agent with dialog memory + Google Sheets logging
+- **v3.1** — HuggingFace local model + sentence-transformers embeddings + Structured Output
 
 ---
 
