@@ -15,21 +15,26 @@ from huggingface_rag import (
 )
 from advanced_rag import rerank, guardrails_check, compute_rag_metrics
 
-load_dotenv()  # читаем OPENROUTER_API_KEY из .env
+load_dotenv()
 
-app = FastAPI(title="RAG API", version="3.0")
+app = FastAPI(title="RAG API", version="3.2")
 
-# ========== НАСТРОЙКИ ==========
-API_KEY = os.environ["OPENROUTER_API_KEY"]
+API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 BASE_URL = "https://openrouter.ai/api/v1"
-LLM_MODEL = "deepseek/deepseek-chat"  # дешевле, через OpenRouter
+LLM_MODEL = "deepseek/deepseek-chat"
 
 # Память диалога для /agent endpoint (in-memory, per session)
 _agent_sessions: dict[str, list] = {}
 
 
-# Глобальное хранилище chunks (в памяти)
-vector_store = VectorStore()
+_vs: VectorStore | None = None
+
+
+def _get_vector_store() -> VectorStore:
+    global _vs
+    if _vs is None:
+        _vs = VectorStore()
+    return _vs
 
 
 # ========== API ФУНКЦИИ ==========
@@ -217,7 +222,7 @@ async def upload_document(file: UploadFile = File(...)):
 
         chunk_id = f"{file.filename}_chunk_{i}"
 
-        vector_store.add_chunk(
+        _get_vector_store().add_chunk(
             chunk_id=chunk_id,
             content=chunk,
             embedding=embedding,
@@ -232,7 +237,7 @@ async def upload_document(file: UploadFile = File(...)):
         "status": "success",
         "filename": file.filename,
         "chunks_created": len(text_chunks),
-        "total_chunks_in_db": vector_store.count(),
+        "total_chunks_in_db": _get_vector_store().count(),
     }
 
 
@@ -240,7 +245,7 @@ async def upload_document(file: UploadFile = File(...)):
 def query(req: QueryRequest):
     """Отвечает на вопрос используя RAG"""
 
-    if vector_store.count() == 0:
+    if _get_vector_store().count() == 0:
         return QueryResponse(
             answer="No documents uploaded yet. Please upload documents first.",
             sources=[],
@@ -251,7 +256,7 @@ def query(req: QueryRequest):
     query_emb = get_embedding(req.query)
 
     # Поиск через ChromaDB
-    results = vector_store.search(query_emb, top_k=req.top_k)
+    results = _get_vector_store().search(query_emb, top_k=req.top_k)
 
     # Извлекаем данные из результатов
     documents = results["documents"][0]  # list of texts
@@ -332,9 +337,9 @@ def agent_query(req: AgentRequest):
     # RAG: найти релевантный контекст
     context = ""
     sources = []
-    if vector_store.count() > 0:
+    if _get_vector_store().count() > 0:
         query_emb = get_embedding(req.query)
-        results = vector_store.search(query_emb, top_k=3)
+        results = _get_vector_store().search(query_emb, top_k=3)
         documents = results["documents"][0]
         metadatas = results["metadatas"][0]
         context_parts = [f"[{m['source']}] {d}" for d, m in zip(documents, metadatas)]
@@ -390,10 +395,10 @@ def clear_session(session_id: str):
 @app.get("/stats")
 def get_stats():
     """Статистика базы знаний"""
-    sources = vector_store.get_all_sources()
+    sources = _get_vector_store().get_all_sources()
 
     return {
-        "total_chunks": vector_store.count(),
+        "total_chunks": _get_vector_store().count(),
         "total_documents": len(sources),
         "documents": sources,
     }
@@ -402,7 +407,7 @@ def get_stats():
 @app.delete("/reset")
 def reset():
     """Очищает базу знаний"""
-    vector_store.clear()
+    _get_vector_store().clear()
     return {"status": "success", "message": "Database cleared"}
 
 
@@ -460,13 +465,13 @@ class StructuredResponse(BaseModel):
 @app.post("/query_hf", response_model=HFQueryResponse)
 def query_hf(req: HFQueryRequest):
     """RAG with local HuggingFace model + sentence-transformers embeddings (no API needed)."""
-    if vector_store.count() == 0:
+    if _get_vector_store().count() == 0:
         return HFQueryResponse(
             answer="No documents uploaded yet.", sources=[], chunks_used=0
         )
 
     query_emb = embed_query(req.query)
-    results = vector_store.search(query_emb, top_k=req.top_k)
+    results = _get_vector_store().search(query_emb, top_k=req.top_k)
 
     documents = results["documents"][0]
     metadatas = results["metadatas"][0]
@@ -553,7 +558,7 @@ class MetricsRequest(BaseModel):
 @app.post("/query_advanced", response_model=AdvancedQueryResponse)
 def query_advanced(req: AdvancedQueryRequest):
     """Advanced RAG: vector search → reranking → LLM → guardrails check → metrics."""
-    if vector_store.count() == 0:
+    if _get_vector_store().count() == 0:
         return AdvancedQueryResponse(
             answer="No documents uploaded yet.",
             reranked_sources=[],
@@ -562,7 +567,7 @@ def query_advanced(req: AdvancedQueryRequest):
         )
 
     query_emb = get_embedding(req.query)
-    results = vector_store.search(query_emb, top_k=req.top_k)
+    results = _get_vector_store().search(query_emb, top_k=req.top_k)
 
     documents = results["documents"][0]
     metadatas = results["metadatas"][0]

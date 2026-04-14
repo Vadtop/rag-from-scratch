@@ -1,6 +1,3 @@
-from sentence_transformers import SentenceTransformer
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
 import logging
 from typing import Any
 
@@ -11,9 +8,11 @@ _llm_model = None
 _llm_tokenizer = None
 
 
-def get_embedding_model() -> SentenceTransformer:
+def get_embedding_model():
     global _emb_model
     if _emb_model is None:
+        from sentence_transformers import SentenceTransformer
+
         logger.info("Loading sentence-transformers model...")
         _emb_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
         logger.info("Embedding model loaded (384-dim)")
@@ -35,6 +34,9 @@ def get_llm():
     if _llm_model is not None:
         return _llm_model, _llm_tokenizer
 
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"
     logger.info(f"Loading LLM: {model_name}...")
     _llm_tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -49,6 +51,8 @@ def get_llm():
 
 
 def generate(prompt: str, max_new_tokens: int = 256, temperature: float = 0.7) -> str:
+    import torch
+
     model, tokenizer = get_llm()
     messages = [{"role": "user", "content": prompt}]
     text = tokenizer.apply_chat_template(
