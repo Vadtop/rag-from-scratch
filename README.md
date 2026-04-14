@@ -2,121 +2,157 @@
 
 **Version:** 3.0 | **Stack:** FastAPI + ChromaDB + DeepSeek + Google Sheets
 
-AI-агент с базой знаний (RAG), памятью диалога и логированием в Google Sheets.
+AI agent with knowledge base (RAG), dialog memory, and Google Sheets logging.
 
-## Что умеет
+---
 
-- **RAG** — отвечает на вопросы на основе загруженных документов, не выдумывает
-- **AI-агент с памятью** — помнит историю диалога в рамках сессии (multi-turn)
-- **Google Sheets логирование** — каждый вопрос и ответ пишется в таблицу
-- **Два подхода** — ручная реализация RAG и LangChain для сравнения
-- **Автооценка качества** — Faithfulness 87.5%, Relevancy 89.6% (LLM-as-judge)
+## Features
 
-## Архитектура
+- **RAG** — answers questions based on uploaded documents, doesn't hallucinate
+- **AI agent with memory** — remembers dialog history per session (multi-turn)
+- **Google Sheets logging** — every Q&A is written to a spreadsheet
+- **Two approaches** — hand-built RAG and LangChain implementation for comparison
+- **Quality evaluation** — Faithfulness 87.5%, Relevancy 89.6% (LLM-as-judge)
+- **Live demo** — deployed on Railway, accessible online
+
+---
+
+## Architecture
 
 ```
-Вопрос пользователя
+User Question
 ↓
 Embedding (text-embedding-3-small via OpenRouter)
 ↓
-ChromaDB — семантический поиск по базе знаний
+ChromaDB — semantic search in knowledge base
 ↓
-Top-K релевантных чанков
+Top-K relevant chunks
 ↓
-DeepSeek LLM — генерация ответа на основе контекста
+DeepSeek LLM — generate answer from context
 ↓
-Ответ + источники + запись в Google Sheets
+Answer + sources + Google Sheets log
 ```
 
-## Эндпоинты
+---
 
-| Метод | Путь | Описание |
-|-------|------|----------|
-| POST | `/upload` | Загрузить документ в базу знаний |
-| POST | `/query` | Задать вопрос (RAG) |
-| POST | `/agent` | AI-агент с памятью диалога |
-| DELETE | `/agent/{session_id}` | Очистить историю сессии |
-| POST | `/upload_langchain` | Загрузить через LangChain |
-| POST | `/query_langchain` | Спросить через LangChain |
-| GET | `/stats` | Статистика базы знаний |
-| DELETE | `/reset` | Очистить базу |
+## Quick Start
 
-## Быстрый старт
+### Docker (recommended)
 
 ```bash
-git clone https://github.com/Vadtop/ai-agent-rag.git
-cd ai-agent-rag
-pip install -r requirements.txt
+git clone https://github.com/Vadtop/rag-from-scratch.git
+cd rag-from-scratch
 
-# Создать .env файл:
+# Create .env file:
 # OPENROUTER_API_KEY=sk-or-...
 # GOOGLE_SHEETS_CREDENTIALS_JSON=credentials.json
-# GOOGLE_SHEETS_ID=твой_id_таблицы
+# GOOGLE_SHEETS_ID=your_sheet_id
+
+docker-compose up --build
+```
+
+### Manual
+
+```bash
+git clone https://github.com/Vadtop/rag-from-scratch.git
+cd rag-from-scratch
+pip install -r requirements.txt
+
+# Create .env file (see above)
 
 uvicorn api:app --reload
 ```
 
-Документация: http://localhost:8000/docs
+API docs: http://localhost:8000/docs
 
-## Примеры запросов
+Live demo: https://rag-from-scratch-production.up.railway.app/chat
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/upload` | Upload document to knowledge base |
+| POST | `/query` | Ask question (RAG) |
+| POST | `/agent` | AI agent with dialog memory |
+| DELETE | `/agent/{session_id}` | Clear session history |
+| POST | `/query_langchain` | Ask via LangChain RAG |
+| GET | `/stats` | Knowledge base statistics |
+| DELETE | `/reset` | Clear knowledge base |
+
+---
+
+## Examples
 
 ```bash
-# Загрузить документ
+# Upload document
 curl -X POST http://localhost:8000/upload \
   -F "file=@documents/ai_agents_business.txt"
 
-# Задать вопрос
+# Ask question
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "Как оптимизировать стоимость LLM?"}'
+  -d '{"query": "How to optimize LLM costs?"}'
 
-# Агент с памятью диалога
+# Agent with memory
 curl -X POST http://localhost:8000/agent \
   -H "Content-Type: application/json" \
-  -d '{"query": "Что такое RAG?", "session_id": "user_1"}'
+  -d '{"query": "What is RAG?", "session_id": "user_1"}'
 
-# Продолжить диалог
+# Continue dialog
 curl -X POST http://localhost:8000/agent \
   -H "Content-Type: application/json" \
-  -d '{"query": "А как это применить в CRM?", "session_id": "user_1"}'
+  -d '{"query": "How to apply this in CRM?", "session_id": "user_1"}'
 ```
 
-## Google Sheets настройка
+---
 
-1. Создать Service Account в Google Cloud Console
-2. Дать доступ к таблице (Editor)
-3. Скачать `credentials.json`
-4. Добавить в `.env`:
+## Google Sheets Setup
+
+1. Create Service Account in Google Cloud Console
+2. Share your spreadsheet with the service account (Editor)
+3. Download `credentials.json`
+4. Add to `.env`:
    - `GOOGLE_SHEETS_CREDENTIALS_JSON=credentials.json`
-   - `GOOGLE_SHEETS_ID=` (ID из URL таблицы)
+   - `GOOGLE_SHEETS_ID=` (ID from spreadsheet URL)
 
-Агент автоматически создаст лист "RAG Log" и будет писать туда все запросы.
+The agent auto-creates a "RAG Log" sheet and logs all queries there.
 
-## Стек
+---
 
-- Python 3.11, FastAPI, uvicorn
-- ChromaDB (векторная БД, HNSW индексирование)
-- OpenRouter API (DeepSeek + embeddings)
-- LangChain (альтернативная реализация)
-- gspread (Google Sheets интеграция)
-
-## Метрики качества
+## Quality Metrics
 
 ```bash
 python evaluate.py
 ```
 
-- Faithfulness: 87.5% — ответ основан на документах, не выдуман
-- Relevancy: 89.6% — найдены правильные чанки
-- Overall: 88.5%
-
-## Эволюция проекта
-
-- **v1.0** — ручной RAG, хранение в памяти
-- **v2.0** — ChromaDB, персистентное хранение
-- **v2.1** — LangChain + автооценка качества
-- **v3.0** — AI-агент с памятью диалога + Google Sheets логирование
+- **Faithfulness:** 87.5% — answer is based on documents, not hallucinated
+- **Relevancy:** 89.6% — correct chunks were retrieved
+- **Overall:** 88.5%
 
 ---
 
-GitHub: [@Vadtop](https://github.com/Vadtop)
+## Tech Stack
+
+- Python 3.11, FastAPI, uvicorn
+- ChromaDB (vector DB, HNSW indexing)
+- OpenRouter API (DeepSeek + embeddings)
+- LangChain (alternative RAG implementation)
+- gspread (Google Sheets integration)
+- Docker + docker-compose
+
+---
+
+## Project Evolution
+
+- **v1.0** — hand-built RAG, in-memory storage
+- **v2.0** — ChromaDB, persistent storage
+- **v2.1** — LangChain + auto quality evaluation
+- **v3.0** — AI agent with dialog memory + Google Sheets logging
+
+---
+
+## Author
+
+[Vadim Titov](https://github.com/Vadtop)
