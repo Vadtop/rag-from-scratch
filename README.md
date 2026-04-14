@@ -161,6 +161,7 @@ python evaluate.py
 - **v3.0** — AI agent with dialog memory + Google Sheets logging
 - **v3.1** — HuggingFace local model + sentence-transformers embeddings + Structured Output
 - **v3.2** — Advanced RAG: reranker, guardrails (PII/refusal/length), embedding cache + batch, quality metrics
+- **v3.3** — asyncio: async embeddings, concurrent batch, async rerank, aiohttp session pool, /query_async endpoint
 
 ---
 

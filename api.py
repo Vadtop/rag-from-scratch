@@ -637,6 +637,78 @@ def rerank_endpoint(query: str, documents: list[str], top_k: int = 3):
     return {"reranked": results}
 
 
+# ========== ASYNC RAG ENDPOINTS ==========
+
+from async_rag import async_embed_query, async_embed_texts, async_rerank, close_session
+
+
+class AsyncQueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    rerank_top_k: int = 3
+
+
+class AsyncQueryResponse(BaseModel):
+    answer: str
+    sources: list
+    chunks_used: int
+
+
+@app.post("/query_async", response_model=AsyncQueryResponse)
+async def query_async(req: AsyncQueryRequest):
+    """Async RAG: concurrent embeddings + reranking for faster response."""
+    vs = _get_vector_store()
+    if vs.count() == 0:
+        return AsyncQueryResponse(
+            answer="No documents uploaded yet.", sources=[], chunks_used=0
+        )
+
+    query_emb = await async_embed_query(req.query)
+
+    results = vs.search(query_emb, top_k=req.top_k)
+    documents = results["documents"][0]
+    metadatas = results["metadatas"][0]
+
+    reranked = await async_rerank(req.query, documents, top_k=req.rerank_top_k)
+
+    context_parts = []
+    for item in reranked:
+        idx = item["index"]
+        meta = metadatas[idx]
+        context_parts.append(
+            f"[{meta['source']}, chunk {meta['chunk_id'] + 1}]\n{item['document']}"
+        )
+
+    context = "\n\n---\n\n".join(context_parts)
+    prompt = (
+        f"Answer the question based on this context.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {req.query}\n\n"
+        f"Answer (be concise):"
+    )
+
+    answer = hf_generate(prompt, max_new_tokens=256, temperature=0.3)
+    sources = list(set(metadatas[item["index"]]["source"] for item in reranked))
+
+    return AsyncQueryResponse(answer=answer, sources=sources, chunks_used=len(reranked))
+
+
+@app.post("/embeddings_async")
+async def compute_embeddings_async(texts: list[str]):
+    """Async batch embedding computation (concurrent batches)."""
+    embs = await async_embed_texts(texts, batch_size=32)
+    return {
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dimension": len(embs[0]),
+        "count": len(embs),
+    }
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_session()
+
+
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     import uvicorn
