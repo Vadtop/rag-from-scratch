@@ -1,4 +1,5 @@
 # RAG AI Agent
+[![Tests](https://github.com/Vadtop/rag-from-scratch/actions/workflows/test.yml/badge.svg)](https://github.com/Vadtop/rag-from-scratch/actions/workflows/test.yml)
 
 **Version:** 3.0 | **Stack:** FastAPI + ChromaDB + DeepSeek + Google Sheets
 
