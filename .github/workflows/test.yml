@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install fastapi uvicorn numpy requests python-dotenv "chromadb>=0.4.0" langchain langchain-openai langchain-community "sentence-transformers>=3.0.0" "pydantic>=2.0" "pytest>=8.0.0" "httpx>=0.27.0"
+
+      - name: Run tests
+        env:
+          OPENROUTER_API_KEY: test-key
+          GOOGLE_SHEETS_ID: ""
+        run: pytest tests/ -v --tb=short
