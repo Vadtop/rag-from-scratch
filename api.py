@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -17,7 +18,18 @@ from advanced_rag import rerank, guardrails_check, compute_rag_metrics
 
 load_dotenv()
 
-app = FastAPI(title="RAG API", version="3.2")
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    from bot import start_bot, stop_bot
+    await start_bot()
+    yield
+    await stop_bot()
+    from async_rag import close_session
+    await close_session()
+
+
+app = FastAPI(title="RAG API", version="3.3", lifespan=lifespan)
 
 API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 BASE_URL = "https://openrouter.ai/api/v1"
@@ -639,7 +651,7 @@ def rerank_endpoint(query: str, documents: list[str], top_k: int = 3):
 
 # ========== ASYNC RAG ENDPOINTS ==========
 
-from async_rag import async_embed_query, async_embed_texts, async_rerank, close_session
+from async_rag import async_embed_query, async_embed_texts, async_rerank
 
 
 class AsyncQueryRequest(BaseModel):
@@ -703,10 +715,6 @@ async def compute_embeddings_async(texts: list[str]):
         "count": len(embs),
     }
 
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await close_session()
 
 
 # ========== ЗАПУСК ==========
