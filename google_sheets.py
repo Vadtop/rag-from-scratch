@@ -26,7 +26,7 @@ def _get_sheet():
         return _sheet
 
     creds_env = os.environ.get("GOOGLE_SHEETS_CREDENTIALS_JSON", "")
-    logger.warning("GS DEBUG: creds starts with: %r", creds_env[:30] if creds_env else "EMPTY")
+    logger.info("GS: credentials configured: %s", "yes" if creds_env else "no")
 
     try:
         import gspread
