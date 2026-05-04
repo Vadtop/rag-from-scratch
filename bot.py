@@ -6,6 +6,7 @@ from aiogram import Bot, Dispatcher, Router, types, F
 from aiogram.filters import CommandStart, Command
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from dotenv import load_dotenv
 
@@ -133,21 +134,65 @@ def _rag_ask(question: str, chat_id: int) -> str:
     return answer
 
 
+def _main_kb() -> types.InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📊 Статистика", callback_data="stats")
+    builder.button(text="🗑 Очистить", callback_data="reset")
+    builder.button(text="❓ Помощь", callback_data="help")
+    builder.adjust(3)
+    return builder.as_markup()
+
+
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
     vs = _get_vector_store()
     docs_count = vs.count()
     await message.answer(
         "👋 Привет! Я RAG AI-агент.\n\n"
-        "Умею:\n"
-        "• Отправить файл .txt — загружу в базу знаний\n"
-        "• /ask ВОПРОС — отвечу из базы знаний (RAG + DeepSeek)\n"
-        "• /upload ТЕКСТ — загружу текст вручную\n"
-        "• /stats — статистика базы знаний\n"
-        "• /reset — очистить базу и историю диалога\n\n"
         f"📄 Документов в базе: {docs_count} чанков\n\n"
-        "Просто отправь .txt файл или напиши вопрос!"
+        "Отправь мне .txt файл — загружу в базу знаний.\n"
+        "Или просто напиши вопрос — отвечу из базы!",
+        reply_markup=_main_kb(),
     )
+
+
+@router.callback_query(F.data == "stats")
+async def cb_stats(callback: types.CallbackQuery):
+    vs = _get_vector_store()
+    sources = vs.get_all_sources()
+    await callback.message.answer(
+        f"📊 База знаний:\n"
+        f"Всего чанков: {vs.count()}\n"
+        f"Документов: {len(sources)}\n"
+        f"Источники: {', '.join(sources) if sources else 'пусто'}",
+        reply_markup=_main_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "reset")
+async def cb_reset(callback: types.CallbackQuery):
+    vs = _get_vector_store()
+    vs.clear()
+    _agent_sessions.pop(callback.message.chat.id, None)
+    await callback.message.answer(
+        "🗑 База знаний и история очищены.",
+        reply_markup=_main_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "help")
+async def cb_help(callback: types.CallbackQuery):
+    await callback.message.answer(
+        "❓ Как пользоваться:\n\n"
+        "1. Отправь .txt файл — загружу в базу знаний\n"
+        "2. Напиши вопрос — отвечу из базы (RAG + DeepSeek)\n"
+        "3. /ask ВОПРОС — то же самое командой\n"
+        "4. /upload ТЕКСТ — загрузить текст вручную",
+        reply_markup=_main_kb(),
+    )
+    await callback.answer()
 
 
 @router.message(Command("ask"))
@@ -160,7 +205,7 @@ async def cmd_ask(message: types.Message):
     await message.chat.do("typing")
     try:
         answer = await asyncio.to_thread(_rag_ask, question, message.chat.id)
-        await message.answer(answer[:4096])
+        await message.answer(answer[:4096], reply_markup=_main_kb())
     except Exception as e:
         logger.exception("RAG error in /ask")
         await message.answer(f"Ошибка: {e}")
@@ -191,7 +236,8 @@ async def cmd_stats(message: types.Message):
         f"📊 База знаний:\n"
         f"Всего чанков: {vs.count()}\n"
         f"Документов: {len(sources)}\n"
-        f"Источники: {', '.join(sources) if sources else 'пусто'}"
+        f"Источники: {', '.join(sources) if sources else 'пусто'}",
+        reply_markup=_main_kb(),
     )
 
 
@@ -200,7 +246,10 @@ async def cmd_reset(message: types.Message):
     vs = _get_vector_store()
     vs.clear()
     _agent_sessions.pop(message.chat.id, None)
-    await message.answer("🗑 База знаний и история диалога очищены.")
+    await message.answer(
+        "🗑 База знаний и история диалога очищены.",
+        reply_markup=_main_kb(),
+    )
 
 
 @router.message(F.document)
@@ -229,7 +278,8 @@ async def handle_document(message: types.Message):
             f"✅ {doc.file_name} загружен!\n"
             f"Чанков: {n}\n"
             f"Всего в базе: {vs.count()}\n\n"
-            "Теперь можешь спрашивать — /ask ВОПРОС или просто напиши вопрос!"
+            "Теперь можешь спрашивать — /ask ВОПРОС или просто напиши вопрос!",
+            reply_markup=_main_kb(),
         )
     except Exception as e:
         logger.exception("Document upload error")
@@ -244,7 +294,7 @@ async def fallback(message: types.Message):
     await message.chat.do("typing")
     try:
         answer = await asyncio.to_thread(_rag_ask, question, message.chat.id)
-        await message.answer(answer[:4096])
+        await message.answer(answer[:4096], reply_markup=_main_kb())
     except Exception as e:
         logger.exception("RAG error in fallback")
         await message.answer(f"Ошибка: {e}")
