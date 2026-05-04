@@ -97,7 +97,7 @@ async def cmd_start(message: types.Message):
     await message.answer(
         "👋 Привет! Я RAG AI-агент.\n\n"
         "Умею:\n"
-        "• /ask <вопрос> — задать вопрос, ответ из базы знаний (RAG + DeepSeek)\n"
+        "• /ask ВОПРОС — задать вопрос, ответ из базы знаний (RAG + DeepSeek)\n"
         "• /start — это приветствие\n\n"
         "Загрузите документы через веб-интерфейс, а потом спрашивайте!"
     )
