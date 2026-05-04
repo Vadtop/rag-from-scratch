@@ -19,12 +19,25 @@ API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 BASE_URL = "https://openrouter.ai/api/v1"
 LLM_MODEL = "deepseek/deepseek-chat"
 
+_agent_sessions: dict[int, list] = {}
+
 
 def _get_vector_store():
     from vector_store import VectorStore
 
-    vs = VectorStore()
-    return vs
+    return VectorStore()
+
+
+def _chunk_text(text, chunk_size=500, overlap=100):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        if chunk.strip():
+            chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
 
 
 def _get_embedding(text):
@@ -55,13 +68,30 @@ def _get_completion(messages):
     return response.json()["choices"][0]["message"]["content"]
 
 
-def _rag_ask(question: str) -> str:
+def _upload_text(filename: str, text: str) -> int:
+    vs = _get_vector_store()
+    chunks = _chunk_text(text, chunk_size=500, overlap=100)
+    for i, chunk in enumerate(chunks):
+        embedding = _get_embedding(chunk)
+        vs.add_chunk(
+            chunk_id=f"{filename}_chunk_{i}",
+            content=chunk,
+            embedding=embedding,
+            metadata={
+                "source": filename,
+                "chunk_id": i,
+                "total_chunks": len(chunks),
+            },
+        )
+    return len(chunks)
+
+
+def _rag_ask(question: str, chat_id: int) -> str:
     vs = _get_vector_store()
     if vs.count() == 0:
         return (
-            "База знаний пока пуста. Загрузите документы через веб-интерфейс "
-            f"({os.environ.get('RAILWAY_PUBLIC_DOMAIN', 'localhost')}) "
-            "и повторите вопрос."
+            "База знаний пуста. Отправь мне документ (файл .txt) "
+            "или используй /upload чтобы загрузить текст, потом спрашивай!"
         )
 
     query_emb = _get_embedding(question)
@@ -74,6 +104,7 @@ def _rag_ask(question: str) -> str:
         for d, m in zip(documents, metadatas)
     ]
     context = "\n\n---\n\n".join(context_parts)
+    sources = list(set(m["source"] for m in metadatas))
 
     system_prompt = (
         "Ты AI-агент с доступом к базе знаний. "
@@ -84,22 +115,38 @@ def _rag_ask(question: str) -> str:
     if context:
         system_prompt += f"\n\nБаза знаний:\n{context}"
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": question},
-    ]
+    history = _agent_sessions.get(chat_id, [])
+
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history[-10:])
+    messages.append({"role": "user", "content": question})
+
     answer = _get_completion(messages)
+
+    history.append({"role": "user", "content": question})
+    history.append({"role": "assistant", "content": answer})
+    _agent_sessions[chat_id] = history
+
+    if sources:
+        answer += f"\n\n📎 Источники: {', '.join(sources)}"
+
     return answer
 
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
+    vs = _get_vector_store()
+    docs_count = vs.count()
     await message.answer(
         "👋 Привет! Я RAG AI-агент.\n\n"
         "Умею:\n"
-        "• /ask ВОПРОС — задать вопрос, ответ из базы знаний (RAG + DeepSeek)\n"
-        "• /start — это приветствие\n\n"
-        "Загрузите документы через веб-интерфейс, а потом спрашивайте!"
+        "• Отправить файл .txt — загружу в базу знаний\n"
+        "• /ask ВОПРОС — отвечу из базы знаний (RAG + DeepSeek)\n"
+        "• /upload ТЕКСТ — загружу текст вручную\n"
+        "• /stats — статистика базы знаний\n"
+        "• /reset — очистить базу и историю диалога\n\n"
+        f"📄 Документов в базе: {docs_count} чанков\n\n"
+        "Просто отправь .txt файл или напиши вопрос!"
     )
 
 
@@ -112,21 +159,91 @@ async def cmd_ask(message: types.Message):
 
     await message.chat.do("typing")
     try:
-        answer = await asyncio.to_thread(_rag_ask, question)
+        answer = await asyncio.to_thread(_rag_ask, question, message.chat.id)
         await message.answer(answer[:4096])
     except Exception as e:
         logger.exception("RAG error in /ask")
         await message.answer(f"Ошибка: {e}")
 
 
+@router.message(Command("upload"))
+async def cmd_upload(message: types.Message):
+    text = message.text.removeprefix("/upload").strip()
+    if not text:
+        await message.answer("Использование: /upload <текст для загрузки в базу знаний>")
+        return
+
+    await message.chat.do("typing")
+    try:
+        n = await asyncio.to_thread(_upload_text, "manual_upload.txt", text)
+        vs = _get_vector_store()
+        await message.answer(f"✅ Загружено {n} чанков. Всего в базе: {vs.count()}")
+    except Exception as e:
+        logger.exception("Upload error")
+        await message.answer(f"Ошибка загрузки: {e}")
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    vs = _get_vector_store()
+    sources = vs.get_all_sources()
+    await message.answer(
+        f"📊 База знаний:\n"
+        f"Всего чанков: {vs.count()}\n"
+        f"Документов: {len(sources)}\n"
+        f"Источники: {', '.join(sources) if sources else 'пусто'}"
+    )
+
+
+@router.message(Command("reset"))
+async def cmd_reset(message: types.Message):
+    vs = _get_vector_store()
+    vs.clear()
+    _agent_sessions.pop(message.chat.id, None)
+    await message.answer("🗑 База знаний и история диалога очищены.")
+
+
+@router.message(F.document)
+async def handle_document(message: types.Message):
+    doc = message.document
+    if not doc.file_name or not doc.file_name.endswith(".txt"):
+        await message.answer("Пока принимаю только .txt файлы. Отправь текстовый файл!")
+        return
+
+    await message.answer(f"📥 Загружаю {doc.file_name}...")
+    await message.chat.do("typing")
+
+    try:
+        file = await message.bot.get_file(doc.file_id)
+        import aiohttp
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://api.telegram.org/file/bot{os.environ.get('BOT_TOKEN', '')}/{file.file_path}"
+            ) as resp:
+                content = await resp.text()
+
+        n = await asyncio.to_thread(_upload_text, doc.file_name, content)
+        vs = _get_vector_store()
+        await message.answer(
+            f"✅ {doc.file_name} загружен!\n"
+            f"Чанков: {n}\n"
+            f"Всего в базе: {vs.count()}\n\n"
+            "Теперь можешь спрашивать — /ask ВОПРОС или просто напиши вопрос!"
+        )
+    except Exception as e:
+        logger.exception("Document upload error")
+        await message.answer(f"Ошибка загрузки файла: {e}")
+
+
 @router.message(F.text)
 async def fallback(message: types.Message):
     question = message.text.strip()
-    if not question:
+    if not question or question.startswith("/"):
         return
     await message.chat.do("typing")
     try:
-        answer = await asyncio.to_thread(_rag_ask, question)
+        answer = await asyncio.to_thread(_rag_ask, question, message.chat.id)
         await message.answer(answer[:4096])
     except Exception as e:
         logger.exception("RAG error in fallback")
